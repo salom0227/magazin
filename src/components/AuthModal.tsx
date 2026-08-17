@@ -323,31 +323,7 @@ export const AuthModal: React.FC = () => {
             </form>
           )}
 
-          {/* Quick Demo Test Buttons */}
-          <div className="mt-6 pt-4 border-t border-[#1c3629]">
-            <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium mb-2.5 justify-center">
-              <Sparkles className="w-3.5 h-3.5 text-[#dfbe9f]" />
-              <span>Tezkor sinov hisoblari (1-click login):</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => quickDemoLogin('user')}
-                className="px-3 py-2 bg-[#14291f] hover:bg-[#1a3528] text-[#dfbe9f] border border-[#274c39] rounded-xl text-xs font-semibold transition-colors flex flex-col items-center justify-center cursor-pointer"
-              >
-                <span>Mijoz (Shahzod Q.)</span>
-                <span className="text-[10px] text-gray-400 font-normal">PIN: 1234</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => quickDemoLogin('admin')}
-                className="px-3 py-2 bg-[#182b20] hover:bg-[#203a2b] text-white border border-[#2f553f] rounded-xl text-xs font-semibold transition-colors flex flex-col items-center justify-center cursor-pointer"
-              >
-                <span>Admin Paneli</span>
-                <span className="text-[10px] text-[#dfbe9f] font-normal">PIN: 1234</span>
-              </button>
-            </div>
-          </div>
+
         </div>
       </motion.div>
     </div>

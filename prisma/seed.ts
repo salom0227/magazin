@@ -1,6 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+import crypto from 'crypto';
+
+function hashPin(pin: string, salt?: string): { hash: string; salt: string } {
+  const generatedSalt = salt || crypto.randomBytes(16).toString("hex");
+  const hash = crypto.pbkdf2Sync(pin, generatedSalt, 1000, 64, "sha512").toString("hex");
+  return { hash, salt: generatedSalt };
+}
 
 const connectionString = process.env.DATABASE_URL;
 const pool = new pg.Pool({ 
@@ -289,11 +296,17 @@ async function main() {
   console.log('✅ Products created');
 
   // Create Admin User
+  const adminPhone = process.env.ADMIN_PHONE || '+998901234567';
+  const adminPin = process.env.ADMIN_PIN || '1234';
+  const { hash: pinHash, salt } = hashPin(adminPin);
+
   await prisma.user.create({
     data: {
       firstName: 'Admin',
       lastName: 'User',
-      phone: '+998901234567',
+      phone: adminPhone,
+      pinHash,
+      salt,
       role: 'admin',
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
       isBlocked: false,
