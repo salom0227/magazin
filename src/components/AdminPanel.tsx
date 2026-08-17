@@ -133,8 +133,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     Array.from(files).forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = (event) => {
-        if (event.target && typeof event.target.result === 'string') {
-          setUploadedImages((prev) => [...prev, event.target.result]);
+        const result = event.target?.result;
+        if (typeof result === 'string') {
+          setUploadedImages((prev) => [...prev, result]);
         }
       };
       reader.readAsDataURL(file);
@@ -481,13 +482,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     price: 100000,
                     oldPrice: 130000,
                     discount: 20,
-                    categorySlug: 'smartphones',
+                    category: 'smartphones',
                     categoryName: 'Smartfonlar',
                     images: ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80'],
                     description: '',
                     stock: 20,
                     rating: 4.8,
-                    isPopular: true,
+                    isFeatured: true,
                     specs: { 'Kafolat': '1 yil' },
                   });
                   setIsEditingProduct(true);
@@ -787,12 +788,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                   <label className="block text-gray-300 mb-1 font-semibold">Kategoriya *</label>
                   <select
-                    value={currentProduct.categorySlug || 'smartphones'}
+                    value={currentProduct.category || 'smartphones'}
                     onChange={(e) => {
                       const selected = categories.find((c) => c.slug === e.target.value);
                       setCurrentProduct({
                         ...currentProduct,
-                        categorySlug: e.target.value,
+                        category: e.target.value,
                         categoryName: selected ? selected.name : 'Boshqa',
                       });
                     }}

@@ -10,6 +10,9 @@ const r2Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.R2_BUCKET || '';
+// Public base URL of the bucket (r2.dev subdomain or custom domain).
+// The S3 API endpoint is not publicly readable, so it cannot be used for image URLs.
+const PUBLIC_BASE_URL = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
 
 export async function uploadToR2(file: Buffer, fileName: string, contentType: string): Promise<string> {
   const command = new PutObjectCommand({
@@ -19,10 +22,13 @@ export async function uploadToR2(file: Buffer, fileName: string, contentType: st
     ContentType: contentType,
   });
 
+  if (!PUBLIC_BASE_URL) {
+    throw new Error('R2_PUBLIC_URL is not configured; uploaded images would not be reachable');
+  }
+
   await r2Client.send(command);
 
-  // Return public URL (adjust based on your R2 setup)
-  return `${process.env.R2_ENDPOINT}/${BUCKET_NAME}/${fileName}`;
+  return `${PUBLIC_BASE_URL}/${fileName}`;
 }
 
 export async function deleteFromR2(fileName: string): Promise<void> {

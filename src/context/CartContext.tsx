@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { CartItem, Product } from '../types';
+import { api } from '../lib/api';
 import { useToast } from './ToastContext';
+import { useAuth } from './AuthContext';
 
 interface CartContextType {
   items: CartItem[];
@@ -51,6 +53,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const { showToast } = useToast();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    api
+      .getFavorites()
+      .then(({ productIds }) => setFavorites(productIds))
+      .catch((err) => console.warn('Sevimlilarni yuklab bo\'lmadi', err));
+  }, [user]);
 
   useEffect(() => {
     try {
@@ -135,15 +146,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const toggleFavorite = (productId: string) => {
-    setFavorites((prev) => {
-      const exists = prev.includes(productId);
-      if (exists) {
-        showToast('Saralangandan olib tashlandi', 'info');
-        return prev.filter((id) => id !== productId);
-      } else {
-        showToast('Saralanganlarga qo\'shildi', 'success');
-        return [...prev, productId];
-      }
+    const wasFavorite = favorites.includes(productId);
+    setFavorites((prev) =>
+      wasFavorite ? prev.filter((id) => id !== productId) : [...prev, productId],
+    );
+    showToast(
+      wasFavorite ? 'Saralangandan olib tashlandi' : 'Saralanganlarga qo\'shildi',
+      wasFavorite ? 'info' : 'success',
+    );
+
+    if (!user) return;
+    const sync = wasFavorite ? api.removeFavorite(productId) : api.addFavorite(productId);
+    sync.catch((err) => {
+      console.error('Sevimlilarni saqlashda xatolik', err);
+      setFavorites((prev) =>
+        wasFavorite ? [...prev, productId] : prev.filter((id) => id !== productId),
+      );
+      showToast('Sevimlilarni saqlab bo\'lmadi', 'error');
     });
   };
 
