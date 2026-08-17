@@ -1,6 +1,20 @@
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+});
+
+// Must stay in sync with hashPin() in server-prisma.ts
+function hashPin(pin: string): { pinHash: string; salt: string } {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const pinHash = crypto.pbkdf2Sync(pin, salt, 100_000, 64, 'sha512').toString('hex');
+  return { pinHash, salt };
+}
+
+const ADMIN_PIN = process.env.SEED_ADMIN_PIN || '1234';
+const DEMO_USER_PIN = process.env.SEED_USER_PIN || '1234';
 
 async function main() {
   console.log('🌱 Starting seed...');
@@ -287,10 +301,22 @@ async function main() {
       role: 'admin',
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
       isBlocked: false,
+      ...hashPin(ADMIN_PIN),
     },
   });
 
-  console.log('✅ Admin user created');
+  await prisma.user.create({
+    data: {
+      firstName: 'Demo',
+      lastName: 'Foydalanuvchi',
+      phone: '+998991234567',
+      role: 'user',
+      isBlocked: false,
+      ...hashPin(DEMO_USER_PIN),
+    },
+  });
+
+  console.log(`✅ Admin (+998901234567) va demo foydalanuvchi (+998991234567) yaratildi, PIN: ${ADMIN_PIN}/${DEMO_USER_PIN}`);
 
   console.log('🎉 Seed completed successfully!');
 }

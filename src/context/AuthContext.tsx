@@ -110,7 +110,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Seeded demo accounts only exist in local development databases.
   const quickDemoLogin = async (role: 'admin' | 'user') => {
+    if (!import.meta.env.DEV) {
+      showToast('Demo kirish faqat development rejimida mavjud', 'error');
+      return;
+    }
     if (role === 'admin') {
       await login('+998901234567', '1234');
     } else {
