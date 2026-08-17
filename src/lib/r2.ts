@@ -21,8 +21,8 @@ export async function uploadToR2(file: Buffer, fileName: string, contentType: st
 
   await r2Client.send(command);
 
-  // Return public URL (adjust based on your R2 setup)
-  return `${process.env.R2_ENDPOINT}/${BUCKET_NAME}/${fileName}`;
+  // Public Development URL orqali qaytariladi (brauzerda ochiladigan manzil)
+  return `${process.env.R2_PUBLIC_URL}/${fileName}`;
 }
 
 export async function deleteFromR2(fileName: string): Promise<void> {
