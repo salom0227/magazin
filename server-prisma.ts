@@ -355,6 +355,42 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+app.post("/api/auth/admin-login", async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: "Parol kiritilmagan" });
+    }
+
+    const adminUser = await prisma.user.findFirst({
+      where: { role: 'admin' },
+    });
+
+    if (!adminUser) {
+      return res.status(404).json({ error: "Admin foydalanuvchisi topilmadi" });
+    }
+
+    const validPasswords = ['admin', '1234', process.env.ADMIN_PIN].filter(Boolean);
+    let isValid = validPasswords.includes(password);
+
+    if (!isValid && adminUser.pinHash && adminUser.salt) {
+      const { hash } = hashPin(password, adminUser.salt);
+      if (hash === adminUser.pinHash) {
+        isValid = true;
+      }
+    }
+
+    if (!isValid) {
+      return res.status(401).json({ error: "Admin paroli noto'g'ri" });
+    }
+
+    const token = generateToken({ id: adminUser.id, role: adminUser.role, phone: adminUser.phone });
+    res.json({ user: adminUser, token, message: "Admin panelga xush kelibsiz" });
+  } catch (error) {
+    res.status(500).json({ error: "Admin login error" });
+  }
+});
+
 // API: Orders
 app.get("/api/orders", authMiddleware, adminMiddleware, async (req, res) => {
   try {

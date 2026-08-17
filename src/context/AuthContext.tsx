@@ -15,6 +15,7 @@ interface AuthContextType {
   closeAuthModal: () => void;
   setAuthModalTab: (tab: 'login' | 'register') => void;
   login: (phone: string, pin: string) => Promise<void>;
+  adminLogin: (password: string) => Promise<void>;
   register: (firstName: string, lastName: string, phone: string, pin: string) => Promise<void>;
   logout: () => void;
   updateProfile: (profile: Partial<User>) => Promise<void>;
@@ -83,6 +84,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err: any) {
       showToast(err.message || 'Kirishda xatolik yuz berdi', 'error');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const adminLogin = async (password: string) => {
+    try {
+      setIsLoading(true);
+      const res = await api.adminLogin(password);
+      localStorage.setItem('zamon_token', res.token);
+      setToken(res.token);
+      setUser(res.user);
+      setIsAuthModalOpen(false);
+      showToast(res.message || 'Admin panelga xush kelibsiz!', 'success');
+      if (authModalCallback) {
+        authModalCallback();
+        setAuthModalCallback(null);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Admin paroli noto\'g\'ri', 'error');
       throw err;
     } finally {
       setIsLoading(false);
@@ -174,6 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         closeAuthModal,
         setAuthModalTab,
         login,
+        adminLogin,
         register,
         logout,
         updateProfile,

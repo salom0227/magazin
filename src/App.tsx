@@ -28,6 +28,7 @@ import { OrdersView } from './components/OrdersView';
 import { ProfileView } from './components/ProfileView';
 import { FavoritesView } from './components/FavoritesView';
 import { AdminPanel } from './components/AdminPanel';
+import { AdminLoginView } from './components/AdminLoginView';
 import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
 import { api } from './lib/api';
@@ -120,23 +121,26 @@ const MainAppContent: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Auto prompt login if visiting /admin as non-admin
-  useEffect(() => {
-    if (activeTab === 'admin' && !isAdmin) {
-      openAuthModal('login');
+  // If Admin tab is selected
+  if (activeTab === 'admin') {
+    if (isAdmin) {
+      return (
+        <AdminPanel
+          categories={categories}
+          onExitAdmin={() => {
+            if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+            setActiveTab('home');
+          }}
+          onRefreshData={loadData}
+        />
+      );
     }
-  }, [activeTab, isAdmin, openAuthModal]);
-
-  // If Admin tab is selected and user is admin
-  if (activeTab === 'admin' && isAdmin) {
     return (
-      <AdminPanel
-        categories={categories}
-        onExitAdmin={() => {
+      <AdminLoginView
+        onGoHome={() => {
           if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
           setActiveTab('home');
         }}
-        onRefreshData={loadData}
       />
     );
   }

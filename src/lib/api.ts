@@ -72,6 +72,24 @@ export const api = {
     }
   },
 
+  async adminLogin(password: string): Promise<AuthResponse> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/admin-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Admin paroli noto\'g\'ri');
+    } catch (e: any) {
+      if (e.message) throw e;
+      throw new Error('Tarmoq xatosi');
+    }
+  },
+
   async register(firstName: string, lastName: string, phone: string, pin: string): Promise<AuthResponse> {
     try {
       const res = await fetch(`${API_BASE}/auth/register`, {
