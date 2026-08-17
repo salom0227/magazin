@@ -90,6 +90,7 @@ export interface Product {
   salesCount: number;
   isFeatured?: boolean;
   isNew?: boolean;
+  isPopular?: boolean;
   isActive: boolean;
   specs: Record<string, string>;
   reviews?: ProductReview[];

@@ -590,7 +590,7 @@ app.get("/api/admin/stats", authMiddleware, adminMiddleware, async (req, res) =>
       cancelledOrders,
       salesTrend,
       topProducts,
-      recentOrders: orders.slice(0, 10),
+      recentOrders: orders.slice(0, 10) as any,
     };
 
     res.json(stats);
