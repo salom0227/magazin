@@ -7,6 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -14,6 +15,8 @@ model User {
   firstName   String
   lastName    String
   phone       String    @unique
+  pinHash     String?
+  salt        String?
   role        String    @default("user") // 'user' | 'admin'
   avatar      String?
   isBlocked   Boolean   @default(false)

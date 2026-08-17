@@ -19,21 +19,21 @@ function getLocalProducts(): Product[] {
   try {
     const saved = localStorage.getItem('velora_local_products_v2');
     if (saved) return JSON.parse(saved);
-  } catch (e) {}
+  } catch (e: any) { if (!import.meta.env.DEV) throw e; }
   return mockProducts;
 }
 
 function saveLocalProducts(products: Product[]) {
   try {
     localStorage.setItem('velora_local_products_v2', JSON.stringify(products));
-  } catch (e) {}
+  } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 }
 
 function getLocalCategories(): Category[] {
   try {
     const saved = localStorage.getItem('velora_local_categories_v2');
     if (saved) return JSON.parse(saved);
-  } catch (e) {}
+  } catch (e: any) { if (!import.meta.env.DEV) throw e; }
   return mockCategories;
 }
 
@@ -41,14 +41,14 @@ function getLocalOrders(): Order[] {
   try {
     const saved = localStorage.getItem('velora_local_orders_v2');
     if (saved) return JSON.parse(saved);
-  } catch (e) {}
+  } catch (e: any) { if (!import.meta.env.DEV) throw e; }
   return mockOrders;
 }
 
 function saveLocalOrders(orders: Order[]) {
   try {
     localStorage.setItem('velora_local_orders_v2', JSON.stringify(orders));
-  } catch (e) {}
+  } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 }
 
 export const api = {
@@ -63,23 +63,13 @@ export const api = {
       if (res.ok) {
         return await res.json();
       }
-    } catch (e) {
-      // Fallback
+      // If response is not ok, throw to prevent local fallback
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Tizimga kirishda xatolik');
+    } catch (e: any) {
+      if (e.message) throw e;
+      throw new Error('Tarmoq xatosi');
     }
-
-    const cleanPhone = phone.replace(/\s+/g, '');
-    if (cleanPhone === '+998901234567' || pin === '9999') {
-      const token = 'mock_admin_jwt_' + Date.now();
-      localStorage.setItem('velora_token', token);
-      localStorage.setItem('velora_user', JSON.stringify(mockAdminUser));
-      return { token, user: mockAdminUser, message: 'Xush kelibsiz, Admin!' };
-    }
-
-    const user: User = { ...mockDefaultUser, phone };
-    const token = 'mock_user_jwt_' + Date.now();
-    localStorage.setItem('velora_token', token);
-    localStorage.setItem('velora_user', JSON.stringify(user));
-    return { token, user, message: 'Xush kelibsiz!' };
   },
 
   async register(firstName: string, lastName: string, phone: string, pin: string): Promise<AuthResponse> {
@@ -92,26 +82,12 @@ export const api = {
       if (res.ok) {
         return await res.json();
       }
-    } catch (e) {
-      // Fallback
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Ro\'yxatdan o\'tishda xatolik');
+    } catch (e: any) {
+      if (e.message) throw e;
+      throw new Error('Tarmoq xatosi');
     }
-
-    const newUser: User = {
-      id: 'user-' + Date.now(),
-      firstName,
-      lastName,
-      phone,
-      role: 'user',
-      isBlocked: false,
-      addresses: [],
-      ordersCount: 0,
-      totalSpent: 0,
-      createdAt: new Date().toISOString(),
-    };
-    const token = 'mock_user_jwt_' + Date.now();
-    localStorage.setItem('velora_token', token);
-    localStorage.setItem('velora_user', JSON.stringify(newUser));
-    return { token, user: newUser, message: 'Muvaffaqiyatli ro\'yxatdan o\'tdingiz' };
   },
 
   async getMe(): Promise<User> {
@@ -122,7 +98,7 @@ export const api = {
       if (res.ok) {
         return await res.json();
       }
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const saved = localStorage.getItem('velora_user');
     if (saved) return JSON.parse(saved);
@@ -137,7 +113,7 @@ export const api = {
         body: JSON.stringify(profile),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const current = await this.getMe();
     const updated = { ...current, ...profile };
@@ -153,7 +129,7 @@ export const api = {
         body: JSON.stringify(address),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const current = await this.getMe();
     const newAddr = {
@@ -178,7 +154,7 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const current = await this.getMe();
     const updated = { ...current, addresses: current.addresses.filter((a) => a.id !== id) };
@@ -186,7 +162,6 @@ export const api = {
     return updated;
   },
 
-  // Products
   async getProducts(params: Record<string, any> = {}): Promise<{ products: Product[]; total: number; page: number; totalPages: number }> {
     try {
       const query = new URLSearchParams();
@@ -198,14 +173,16 @@ export const api = {
       const res = await fetch(`${API_BASE}/products?${query.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.products) && data.products.length > 0) {
-          saveLocalProducts(data.products);
-          return data;
-        }
+        saveLocalProducts(data.products || []);
+        return data;
       }
-    } catch (e) {}
+      throw new Error("Server error");
+    } catch (e) {
+      // Fallback only in dev
+      if (!import.meta.env.DEV) throw e;
+    }
 
-    // Instant local filter & sort
+    // Instant local filter & sort (DEV fallback)
     let prods = [...getLocalProducts()];
 
     if (params.category && params.category !== 'all') {
@@ -229,7 +206,6 @@ export const api = {
     } else if (params.sort === 'new') {
       prods.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } else {
-      // popular
       prods.sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0));
     }
 
@@ -245,7 +221,10 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/products/${id}`);
       if (res.ok) return await res.json();
-    } catch (e) {}
+      throw new Error("Server error");
+    } catch (e) {
+      if (!import.meta.env.DEV) throw e;
+    }
 
     const prods = getLocalProducts();
     const product = prods.find((p) => p.id === id) || prods[0];
@@ -261,7 +240,7 @@ export const api = {
         body: JSON.stringify(product),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const prods = getLocalProducts();
     const newP: Product = {
@@ -298,7 +277,7 @@ export const api = {
         body: JSON.stringify(product),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const prods = getLocalProducts();
     const idx = prods.findIndex((p) => p.id === id);
@@ -317,7 +296,7 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const prods = getLocalProducts().filter((p) => p.id !== id);
     saveLocalProducts(prods);
@@ -332,7 +311,7 @@ export const api = {
         body: JSON.stringify({ rating, comment }),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const prods = getLocalProducts();
     const prod = prods.find((p) => p.id === productId);
@@ -361,7 +340,7 @@ export const api = {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) return data;
       }
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
     return getLocalCategories();
   },
 
@@ -373,7 +352,7 @@ export const api = {
         body: JSON.stringify(category),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const newCat: Category = {
       id: 'cat-' + Date.now(),
@@ -395,7 +374,7 @@ export const api = {
         body: JSON.stringify(category),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return { ...mockCategories[0], ...category, id };
   },
@@ -407,7 +386,7 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return { message: 'Kategoriya o\'chirildi' };
   },
@@ -425,10 +404,18 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(orderData),
       });
-      if (res.ok) return await res.json();
-    } catch (e) {}
+      if (res.ok) {
+        const order = await res.json();
+        return { order, message: 'Buyurtma rasmiylashtirildi' };
+      }
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Buyurtma yaratishda xatolik');
+    } catch (e: any) {
+      if (!import.meta.env.DEV) throw e;
+      if (e.message && e.message !== 'Failed to fetch') throw e;
+    }
 
-    // Generate local order
+    // Generate local order (fallback for DEV only)
     const prods = getLocalProducts();
     const orderItems = orderData.items.map((i) => {
       const p = prods.find((prod) => prod.id === i.productId) || prods[0];
@@ -470,7 +457,7 @@ export const api = {
     const orders = [newOrder, ...getLocalOrders()];
     saveLocalOrders(orders);
 
-    return { order: newOrder, message: 'Buyurtma rasmiylashtirildi' };
+    return { order: newOrder, message: 'Buyurtma rasmiylashtirildi (DEV)' };
   },
 
   async getOrders(): Promise<Order[]> {
@@ -485,7 +472,7 @@ export const api = {
           return data;
         }
       }
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return getLocalOrders();
   },
@@ -496,7 +483,7 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const orders = getLocalOrders();
     const found = orders.find((o) => o.id === id);
@@ -512,7 +499,7 @@ export const api = {
         body: JSON.stringify({ status, note }),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const orders = getLocalOrders();
     const idx = orders.findIndex((o) => o.id === id);
@@ -539,7 +526,7 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const orders = getLocalOrders();
     const prods = getLocalProducts();
@@ -584,7 +571,7 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return [mockDefaultUser, mockAdminUser];
   },
@@ -600,7 +587,7 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/currencies`);
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return [
       { id: 'currency-usd', code: 'USD', symbol: '$', rate: 12700, isActive: true },
@@ -618,7 +605,7 @@ export const api = {
         body: JSON.stringify(currency),
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return { id, code: 'USD', symbol: '$', rate: 12700, isActive: true };
   },

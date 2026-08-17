@@ -11,7 +11,14 @@ import type { User, Product, Category, Order, AdminStats, OrderStatus, ProductRe
 const prisma = new PrismaClient();
 const app = express();
 const PORT = 3000;
-const JWT_SECRET = process.env.JWT_SECRET || "zamon-market-secure-jwt-key-2025";
+if (!process.env.JWT_SECRET) {
+  console.error("CRITICAL: JWT_SECRET environment variable is missing.");
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Rate limiting
+const loginAttempts: Record<string, { attempts: number; lockUntil?: number }> = {};
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -107,7 +114,7 @@ app.get("/api/categories", async (req, res) => {
 // API: Products
 app.get("/api/products", async (req, res) => {
   try {
-    const { category, search, limit = 50 } = req.query;
+    const { category, search, limit = 50, page = 1, sort = "new" } = req.query;
     const where: any = { isActive: true };
     
     if (category && category !== "all") {
@@ -118,16 +125,32 @@ app.get("/api/products", async (req, res) => {
       where.name = { contains: search as string, mode: 'insensitive' };
     }
 
-    const products = await prisma.product.findMany({
-      where,
-      include: {
-        variants: true,
-      },
-      take: Number(limit),
-      orderBy: { createdAt: 'desc' }
-    });
+    let orderBy: any = { createdAt: 'desc' };
+    if (sort === 'price_asc') orderBy = { price: 'asc' };
+    else if (sort === 'price_desc') orderBy = { price: 'desc' };
+    else if (sort === 'rating') orderBy = { rating: 'desc' };
+    else if (sort === 'popular') orderBy = { salesCount: 'desc' };
 
-    res.json(products);
+    const take = Number(limit);
+    const skip = (Number(page) - 1) * take;
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: { variants: true },
+        take,
+        skip,
+        orderBy
+      }),
+      prisma.product.count({ where })
+    ]);
+
+    res.json({
+      products,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / take) || 1
+    });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch products" });
   }
@@ -150,7 +173,17 @@ app.get("/api/products/:id", async (req, res) => {
       return res.status(404).json({ error: "Product not found" });
     }
 
-    res.json(product);
+    const related = await prisma.product.findMany({
+      where: {
+        categorySlug: product.categorySlug,
+        id: { not: product.id },
+        isActive: true
+      },
+      take: 5,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ product, related });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch product" });
   }
@@ -248,14 +281,14 @@ app.post("/api/auth/register", async (req, res) => {
 
     const { hash, salt } = hashPin(pin);
     
-    // Note: Prisma doesn't have pinHash/salt fields, we'll need to add them or use a different approach
-    // For now, we'll store the hash in a custom field or use a separate table
     const user = await prisma.user.create({
       data: {
         firstName,
         lastName,
         phone,
         role: 'user',
+        pinHash: hash,
+        salt: salt,
       },
     });
 
@@ -270,6 +303,11 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { phone, pin } = req.body;
+
+    const attempt = loginAttempts[phone];
+    if (attempt && attempt.lockUntil && attempt.lockUntil > Date.now()) {
+      return res.status(429).json({ error: "Tizim vaqtincha bloklandi. Keyinroq urinib ko'ring." });
+    }
     
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -279,8 +317,24 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Note: PIN verification needs to be implemented with proper hashing
-    // For now, we'll skip PIN verification or implement a simple version
+    if (!user.pinHash || !user.salt) {
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    const { hash } = hashPin(pin, user.salt);
+    if (hash !== user.pinHash) {
+      if (!loginAttempts[phone]) loginAttempts[phone] = { attempts: 0 };
+      loginAttempts[phone].attempts += 1;
+      
+      if (loginAttempts[phone].attempts >= 5) {
+        loginAttempts[phone].lockUntil = Date.now() + 15 * 60 * 1000; // 15 mins lock
+        return res.status(429).json({ error: "Ketma-ket xato urinishlar. 15 daqiqadan so'ng urinib ko'ring." });
+      }
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Success, reset attempts
+    if (loginAttempts[phone]) delete loginAttempts[phone];
     
     const token = generateToken({ id: user.id, role: user.role, phone: user.phone });
     
@@ -328,44 +382,97 @@ app.post("/api/orders", async (req, res) => {
   try {
     const { items, customer, deliveryAddress, paymentMethod } = req.body;
     
-    const subtotal = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
-    const deliveryFee = 30000;
-    const total = subtotal + deliveryFee;
-    
-    const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+    const order = await prisma.$transaction(async (tx) => {
+      let subtotal = 0;
+      const orderItemsData = [];
+      
+      for (const item of items) {
+        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        if (!product) throw new Error(`Mahsulot topilmadi: ${item.productId}`);
+        if (product.stock < item.quantity) {
+          throw new Error(`Kechirasiz, "${product.name}" mahsulotidan faqat ${product.stock} dona qolgan.`);
+        }
+        
+        // Calculate with real price from DB
+        subtotal += product.price * item.quantity;
+        
+        // Decrease stock
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { 
+            stock: { decrement: item.quantity },
+            salesCount: { increment: item.quantity }
+          }
+        });
+        
+        orderItemsData.push({
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          quantity: item.quantity,
+          image: product.images[0] || "",
+          categoryName: product.categoryName
+        });
+      }
+      
+      const deliveryFee = subtotal >= 500000 ? 0 : 30000;
+      const total = subtotal + deliveryFee;
+      const orderNumber = `ORD-${crypto.randomBytes(3).toString('hex').toUpperCase()}-${Date.now().toString().slice(-4)}`;
 
-    const order = await prisma.order.create({
-      data: {
-        orderNumber,
-        userId: customer.userId || null,
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        phone: customer.phone,
-        subtotal,
-        deliveryFee,
-        total,
-        paymentMethod,
-        status: 'Pending',
-        items: {
-          create: items,
+      return await tx.order.create({
+        data: {
+          orderNumber,
+          userId: customer.userId || null,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          phone: customer.phone,
+          subtotal,
+          deliveryFee,
+          total,
+          paymentMethod,
+          status: 'Pending',
+          items: {
+            create: orderItemsData,
+          },
+          deliveryAddress: {
+            create: {
+              region: deliveryAddress.region,
+              district: deliveryAddress.district,
+              street: deliveryAddress.street,
+              house: deliveryAddress.house,
+              apartment: deliveryAddress.apartment,
+              notes: deliveryAddress.notes,
+              latitude: deliveryAddress.latitude,
+              longitude: deliveryAddress.longitude,
+              formattedAddress: deliveryAddress.formattedAddress,
+            },
+          },
+          statusHistory: [
+            {
+              status: 'Pending',
+              timestamp: new Date().toISOString(),
+              note: 'Buyurtma rasmiylashtirildi'
+            }
+          ]
         },
-        deliveryAddress: {
-          create: deliveryAddress,
+        include: {
+          items: true,
+          deliveryAddress: true,
         },
-      },
-      include: {
-        items: true,
-        deliveryAddress: true,
-      },
+      });
     });
 
     // Send Telegram notification
-    await sendOrderNotification(order);
+    try {
+      await sendOrderNotification(order);
+    } catch (e) {
+      console.error('Telegram API error:', e);
+    }
 
     res.json(order);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Order creation error:', error);
-    res.status(500).json({ error: "Failed to create order" });
+    res.status(400).json({ error: error.message || "Failed to create order" });
   }
 });
 
@@ -501,6 +608,237 @@ app.get("/api/users", authMiddleware, adminMiddleware, async (req, res) => {
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// API: Health
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// API: Auth - Me & Profile
+app.get("/api/auth/me", authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { addresses: true }
+    });
+    if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+app.put("/api/auth/profile", authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const { firstName, lastName, avatar } = req.body;
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { firstName, lastName, avatar },
+      include: { addresses: true }
+    });
+    res.json(updatedUser);
+  } catch (error) {
+    res.status(500).json({ error: "Profilni yangilashda xatolik" });
+  }
+});
+
+// API: Addresses
+app.post("/api/auth/addresses", authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const { title, region, district, street, house, apartment, notes, latitude, longitude, formattedAddress, isDefault } = req.body;
+    
+    if (isDefault) {
+      await prisma.address.updateMany({
+        where: { userId },
+        data: { isDefault: false }
+      });
+    }
+
+    const address = await prisma.address.create({
+      data: {
+        userId,
+        title, region, district, street, house, apartment, notes, latitude, longitude, formattedAddress,
+        isDefault: isDefault || false
+      }
+    });
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { addresses: true } });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: "Manzil qo'shishda xatolik" });
+  }
+});
+
+app.delete("/api/auth/addresses/:id", authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    await prisma.address.deleteMany({
+      where: { id: req.params.id, userId }
+    });
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { addresses: true } });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: "Manzilni o'chirishda xatolik" });
+  }
+});
+
+// API: Favorites
+app.get("/api/favorites", authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const favorites = await prisma.favorite.findMany({
+      where: { userId },
+      include: { product: true }
+    });
+    res.json(favorites.map(f => f.product));
+  } catch (error) {
+    res.status(500).json({ error: "Yoqtirganlarni olishda xatolik" });
+  }
+});
+
+app.post("/api/favorites", authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const { productId } = req.body;
+    await prisma.favorite.create({
+      data: { userId, productId }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Saqlashda xatolik" });
+  }
+});
+
+app.delete("/api/favorites/:productId", authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    await prisma.favorite.deleteMany({
+      where: { userId, productId: req.params.productId }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "O'chirishda xatolik" });
+  }
+});
+
+// API: Product Reviews
+app.post("/api/products/:id/reviews", authMiddleware, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const userId = (req as any).user.id;
+    const { rating, comment } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+
+    const review = await prisma.productReview.create({
+      data: {
+        productId,
+        userId,
+        userName: `${user.firstName} ${user.lastName}`,
+        rating: Number(rating),
+        comment
+      }
+    });
+
+    // Update product rating and reviews count
+    const productReviews = await prisma.productReview.findMany({ where: { productId } });
+    const totalRating = productReviews.reduce((sum, r) => sum + r.rating, 0);
+    const averageRating = totalRating / productReviews.length;
+
+    await prisma.product.update({
+      where: { id: productId },
+      data: {
+        rating: averageRating,
+        reviewsCount: productReviews.length
+      }
+    });
+
+    res.json(review);
+  } catch (error) {
+    res.status(500).json({ error: "Sharh qoldirishda xatolik" });
+  }
+});
+
+// API: Categories Admin
+app.post("/api/categories", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const category = await prisma.category.create({ data: req.body });
+    res.json(category);
+  } catch (error) {
+    res.status(500).json({ error: "Toifa yaratishda xatolik" });
+  }
+});
+
+app.put("/api/categories/:id", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const category = await prisma.category.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
+    res.json(category);
+  } catch (error) {
+    res.status(500).json({ error: "Toifa yangilashda xatolik" });
+  }
+});
+
+app.delete("/api/categories/:id", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    await prisma.category.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Toifa o'chirishda xatolik" });
+  }
+});
+
+// API: Single Order
+app.get("/api/orders/:id", authMiddleware, async (req, res) => {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { items: true, deliveryAddress: true, user: true }
+    });
+    if (!order) return res.status(404).json({ error: "Buyurtma topilmadi" });
+    
+    // Check if user owns the order, unless they are admin
+    const user = (req as any).user;
+    if (user.role !== "admin" && order.userId !== user.id) {
+      return res.status(403).json({ error: "Ruxsat etilmagan" });
+    }
+    
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: "Buyurtmani olishda xatolik" });
+  }
+});
+
+// API: Admin Users
+app.get("/api/admin/users", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: "Foydalanuvchilarni olishda xatolik" });
+  }
+});
+
+app.put("/api/admin/users/:id/block", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { isBlocked } = req.body;
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isBlocked }
+    });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: "Holatni o'zgartirishda xatolik" });
   }
 });
 

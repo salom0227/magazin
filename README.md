@@ -1,20 +1,25 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Magazin E-commerce
 
-# Run and deploy your AI Studio app
+This is an E-commerce web application with a full backend powered by Express and Prisma.
 
-This contains everything you need to run your app locally.
+## Setup Instructions
 
-View your app in AI Studio: https://ai.studio/apps/b0a99b73-27d8-412f-af12-afb454355960
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
+1. **Install dependencies:**
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+
+2. **Environment Variables:**
+   Create a `.env` file based on `.env.example`.
+   Ensure `DATABASE_URL` and `JWT_SECRET` are correctly configured.
+
+3. **Database Migration:**
+   Apply database schemas:
+   `npx prisma migrate dev`
+
+4. **Seed Database (Optional):**
+   Seed the database with initial categories and products:
+   `npm run prisma:seed`
+
+5. **Run the App:**
    `npm run dev`
+
+**Note:** The backend entry point is `server-prisma.ts`. The legacy file `server.ts` has been moved to the `archive/` folder.
