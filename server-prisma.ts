@@ -13,7 +13,7 @@ import type { User, Product, Category, Order, AdminStats, OrderStatus, ProductRe
 const connectionString = process.env.DATABASE_URL;
 const pool = new pg.Pool({ 
   connectionString,
-  ssl: connectionString && !connectionString.includes('sslmode=disable') && !connectionString.includes('localhost') && !connectionString.includes('127.0.0.1')
+  ssl: connectionString && !connectionString.includes('localhost') && !connectionString.includes('127.0.0.1')
     ? { rejectUnauthorized: false }
     : undefined
 });
@@ -21,6 +21,33 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 const app = express();
+
+// Diagnostic endpoint to check DB connection and tables
+app.get("/api/db-diagnose", async (req, res) => {
+  try {
+    await prisma.$connect();
+    const tables = await prisma.$queryRaw`SELECT table_name FROM information_schema.tables WHERE table_schema='public'`;
+    res.json({ 
+      status: "connected", 
+      message: "Database connected successfully!", 
+      tables,
+      env: {
+        hasDbUrl: !!process.env.DATABASE_URL,
+        hasJwtSecret: !!process.env.JWT_SECRET,
+        hasAdminPin: !!process.env.ADMIN_PIN
+      }
+    });
+  } catch (err: any) {
+    console.error("DB Diagnose Error:", err);
+    res.status(500).json({ 
+      status: "failed", 
+      message: err.message, 
+      code: err.code,
+      stack: err.stack 
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 if (!process.env.JWT_SECRET) {
   console.error("CRITICAL: JWT_SECRET environment variable is missing.");
@@ -118,6 +145,7 @@ app.get("/api/categories", async (req, res) => {
     });
     res.json(categories);
   } catch (error) {
+    console.error("Categories fetch error:", error);
     res.status(500).json({ error: "Failed to fetch categories" });
   }
 });
@@ -387,6 +415,7 @@ app.post("/api/auth/admin-login", async (req, res) => {
     const token = generateToken({ id: adminUser.id, role: adminUser.role, phone: adminUser.phone });
     res.json({ user: adminUser, token, message: "Admin panelga xush kelibsiz" });
   } catch (error) {
+    console.error("Admin login error:", error);
     res.status(500).json({ error: "Admin login error" });
   }
 });
