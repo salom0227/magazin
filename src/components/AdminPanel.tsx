@@ -134,7 +134,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target && typeof event.target.result === 'string') {
-          setUploadedImages((prev) => [...prev, event.target.result]);
+          setUploadedImages((prev) => [...prev, event.target!.result as string]);
         }
       };
       reader.readAsDataURL(file);
@@ -481,6 +481,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     price: 100000,
                     oldPrice: 130000,
                     discount: 20,
+                    category: 'smartphones',
                     categorySlug: 'smartphones',
                     categoryName: 'Smartfonlar',
                     images: ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80'],
@@ -787,11 +788,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                   <label className="block text-gray-300 mb-1 font-semibold">Kategoriya *</label>
                   <select
-                    value={currentProduct.categorySlug || 'smartphones'}
+                    value={currentProduct.categorySlug || currentProduct.category || 'smartphones'}
                     onChange={(e) => {
                       const selected = categories.find((c) => c.slug === e.target.value);
                       setCurrentProduct({
                         ...currentProduct,
+                        category: e.target.value,
                         categorySlug: e.target.value,
                         categoryName: selected ? selected.name : 'Boshqa',
                       });

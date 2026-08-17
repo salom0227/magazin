@@ -81,6 +81,7 @@ export interface Product {
   oldPrice?: number;
   discount?: number; // percentage e.g. 20
   category: string; // category slug or id
+  categorySlug?: string;
   categoryName: string;
   images: string[];
   stock: number; // total stock across variants
