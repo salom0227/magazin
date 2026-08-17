@@ -3,12 +3,18 @@ import path from "path";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pg from 'pg';
 import { uploadToR2, generateFileName } from './src/lib/r2';
 import { sendOrderNotification } from './src/lib/telegram';
 import multer from 'multer';
 import type { User, Product, Category, Order, AdminStats, OrderStatus, ProductReview, Currency } from "./src/types";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+const pool = new pg.Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 if (!process.env.JWT_SECRET) {
