@@ -82,6 +82,49 @@ function hashPin(pin: string, salt?: string): { hash: string; salt: string } {
   return { hash, salt: generatedSalt };
 }
 
+function sanitizeProductData(data: any) {
+  const sanitized: any = {};
+  const allowedKeys = [
+    "name",
+    "description",
+    "price",
+    "oldPrice",
+    "discount",
+    "categorySlug",
+    "categoryName",
+    "images",
+    "stock",
+    "rating",
+    "reviewsCount",
+    "salesCount",
+    "isFeatured",
+    "isNew",
+    "isActive",
+    "specs",
+    "wholesalePrice",
+    "piecePrice",
+  ];
+
+  allowedKeys.forEach((key) => {
+    if (data[key] !== undefined) {
+      sanitized[key] = data[key];
+    }
+  });
+
+  // Type casts
+  if (sanitized.price !== undefined) sanitized.price = Math.round(Number(sanitized.price));
+  if (sanitized.oldPrice !== undefined) sanitized.oldPrice = Math.round(Number(sanitized.oldPrice));
+  if (sanitized.discount !== undefined) sanitized.discount = Math.round(Number(sanitized.discount));
+  if (sanitized.stock !== undefined) sanitized.stock = Math.round(Number(sanitized.stock));
+  if (sanitized.rating !== undefined) sanitized.rating = Number(sanitized.rating);
+  if (sanitized.reviewsCount !== undefined) sanitized.reviewsCount = Math.round(Number(sanitized.reviewsCount));
+  if (sanitized.salesCount !== undefined) sanitized.salesCount = Math.round(Number(sanitized.salesCount));
+  if (sanitized.wholesalePrice !== undefined) sanitized.wholesalePrice = Math.round(Number(sanitized.wholesalePrice));
+  if (sanitized.piecePrice !== undefined) sanitized.piecePrice = Math.round(Number(sanitized.piecePrice));
+
+  return sanitized;
+}
+
 // Utility: Simple secure JWT implementation using HMAC-SHA256
 function generateToken(payload: { id: string; role: string; phone: string }): string {
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
@@ -230,25 +273,70 @@ app.get("/api/products/:id", async (req, res) => {
 
 app.post("/api/products", authMiddleware, adminMiddleware, async (req, res) => {
   try {
+    const { variants, ...rest } = req.body;
+    const sanitizedProduct = sanitizeProductData(rest);
+
     const product = await prisma.product.create({
-      data: req.body,
+      data: {
+        ...sanitizedProduct,
+        variants: variants && Array.isArray(variants) ? {
+          create: variants.map((v: any) => ({
+            name: v.name,
+            sku: v.sku || `SKU-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+            retailPrice: Math.round(Number(v.retailPrice || v.price || 0)),
+            wholesalePrice: Math.round(Number(v.wholesalePrice || v.price || 0)),
+            usdPrice: v.usdPrice ? Number(v.usdPrice) : null,
+            eurPrice: v.eurPrice ? Number(v.eurPrice) : null,
+            stock: Math.round(Number(v.stock || 0)),
+            wholesaleTiers: v.wholesaleTiers || [],
+          }))
+        } : undefined
+      },
       include: { variants: true },
     });
     res.json(product);
   } catch (error) {
+    console.error("Create product error:", error);
     res.status(500).json({ error: "Failed to create product" });
   }
 });
 
 app.put("/api/products/:id", authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const product = await prisma.product.update({
-      where: { id: req.params.id },
-      data: req.body,
-      include: { variants: true },
+    const { variants, ...rest } = req.body;
+    const sanitizedProduct = sanitizeProductData(rest);
+
+    const product = await prisma.$transaction(async (tx) => {
+      if (variants && Array.isArray(variants)) {
+        await tx.productVariant.deleteMany({
+          where: { productId: req.params.id }
+        });
+      }
+
+      return await tx.product.update({
+        where: { id: req.params.id },
+        data: {
+          ...sanitizedProduct,
+          variants: variants && Array.isArray(variants) ? {
+            create: variants.map((v: any) => ({
+              name: v.name,
+              sku: v.sku || `SKU-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+              retailPrice: Math.round(Number(v.retailPrice || v.price || 0)),
+              wholesalePrice: Math.round(Number(v.wholesalePrice || v.price || 0)),
+              usdPrice: v.usdPrice ? Number(v.usdPrice) : null,
+              eurPrice: v.eurPrice ? Number(v.eurPrice) : null,
+              stock: Math.round(Number(v.stock || 0)),
+              wholesaleTiers: v.wholesaleTiers || [],
+            }))
+          } : undefined
+        },
+        include: { variants: true }
+      });
     });
+
     res.json(product);
   } catch (error) {
+    console.error("Update product error:", error);
     res.status(500).json({ error: "Failed to update product" });
   }
 });
@@ -260,6 +348,7 @@ app.delete("/api/products/:id", authMiddleware, adminMiddleware, async (req, res
     });
     res.json({ success: true });
   } catch (error) {
+    console.error("Delete product error:", error);
     res.status(500).json({ error: "Failed to delete product" });
   }
 });
