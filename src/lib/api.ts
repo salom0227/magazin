@@ -10,7 +10,7 @@ import {
 const API_BASE = '/api';
 
 function getAuthHeader(): Record<string, string> {
-  const token = localStorage.getItem('velora_token');
+  const token = localStorage.getItem('zamon_token') || localStorage.getItem('velora_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
