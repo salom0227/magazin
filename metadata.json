@@ -1,0 +1,6 @@
+{
+  "name": "Zamon Market - E-Commerce & Online Magazine",
+  "description": "Velora Shop - Eksklyuziv mobile-first online do'kon va e-tijorat platformasi. Geolocation orqali manzil tanlash, qulay savat, real-time buyurtmalar va admin paneli.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

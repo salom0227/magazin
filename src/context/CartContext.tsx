@@ -1,0 +1,208 @@
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import type { CartItem, Product } from '../types';
+import { useToast } from './ToastContext';
+
+interface CartContextType {
+  items: CartItem[];
+  itemsCount: number;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  freeDeliveryThreshold: number;
+  amountNeededForFreeDelivery: number;
+  isCartDrawerOpen: boolean;
+  setIsCartDrawerOpen: (open: boolean) => void;
+  isCheckoutModalOpen: boolean;
+  setIsCheckoutModalOpen: (open: boolean) => void;
+  addToCart: (product: Product, quantity?: number, options?: { color?: string; size?: string }) => void;
+  updateQuantity: (productId: string, quantity: number) => void;
+  removeFromCart: (productId: string) => void;
+  clearCart: () => void;
+  getItemQuantity: (productId: string) => number;
+  favorites: string[];
+  toggleFavorite: (productId: string) => void;
+  isFavorite: (productId: string) => boolean;
+}
+
+const CartContext = createContext<CartContextType | undefined>(undefined);
+
+const FREE_DELIVERY_THRESHOLD = 500000; // 500 000 so'm
+const STANDARD_DELIVERY_FEE = 25000; // 25 000 so'm
+
+export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [items, setItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('zamon_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('zamon_favorites');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zamon_cart', JSON.stringify(items));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [items]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zamon_favorites', JSON.stringify(favorites));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [favorites]);
+
+  const addToCart = (product: Product, quantity = 1, options?: { color?: string; size?: string }) => {
+    if (product.stock <= 0) {
+      showToast('Kechirasiz, mahsulot omborda qolmagan', 'error');
+      return;
+    }
+
+    setItems((prev) => {
+      const existing = prev.find((item) => item.productId === product.id);
+      if (existing) {
+        const newQty = Math.min(existing.quantity + quantity, product.stock);
+        return prev.map((item) =>
+          item.productId === product.id
+            ? {
+                ...item,
+                quantity: newQty,
+                selectedColor: options?.color || item.selectedColor,
+                selectedSize: options?.size || item.selectedSize,
+              }
+            : item
+        );
+      }
+      return [
+        ...prev,
+        {
+          productId: product.id,
+          product,
+          quantity: Math.min(quantity, product.stock),
+          selectedColor: options?.color,
+          selectedSize: options?.size,
+        },
+      ];
+    });
+
+    showToast(`"${product.name.slice(0, 24)}..." savatga qo'shildi`, 'success');
+  };
+
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.productId === productId) {
+          const maxQty = item.product.stock || 99;
+          return { ...item, quantity: Math.min(quantity, maxQty) };
+        }
+        return item;
+      })
+    );
+  };
+
+  const removeFromCart = (productId: string) => {
+    setItems((prev) => prev.filter((item) => item.productId !== productId));
+    showToast('Mahsulot savatdan olib tashlandi', 'info');
+  };
+
+  const clearCart = () => {
+    setItems([]);
+  };
+
+  const getItemQuantity = (productId: string): number => {
+    const found = items.find((i) => i.productId === productId);
+    return found ? found.quantity : 0;
+  };
+
+  const toggleFavorite = (productId: string) => {
+    setFavorites((prev) => {
+      const exists = prev.includes(productId);
+      if (exists) {
+        showToast('Saralangandan olib tashlandi', 'info');
+        return prev.filter((id) => id !== productId);
+      } else {
+        showToast('Saralanganlarga qo\'shildi', 'success');
+        return [...prev, productId];
+      }
+    });
+  };
+
+  const isFavorite = (productId: string): boolean => {
+    return favorites.includes(productId);
+  };
+
+  const subtotal = useMemo(() => {
+    return items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  }, [items]);
+
+  const itemsCount = useMemo(() => {
+    return items.reduce((sum, item) => sum + item.quantity, 0);
+  }, [items]);
+
+  const deliveryFee = useMemo(() => {
+    if (subtotal === 0) return 0;
+    return subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
+  }, [subtotal]);
+
+  const total = useMemo(() => {
+    return subtotal + deliveryFee;
+  }, [subtotal, deliveryFee]);
+
+  const amountNeededForFreeDelivery = useMemo(() => {
+    return Math.max(0, FREE_DELIVERY_THRESHOLD - subtotal);
+  }, [subtotal]);
+
+  return (
+    <CartContext.Provider
+      value={{
+        items,
+        itemsCount,
+        subtotal,
+        deliveryFee,
+        total,
+        freeDeliveryThreshold: FREE_DELIVERY_THRESHOLD,
+        amountNeededForFreeDelivery,
+        isCartDrawerOpen,
+        setIsCartDrawerOpen,
+        isCheckoutModalOpen,
+        setIsCheckoutModalOpen,
+        addToCart,
+        updateQuantity,
+        removeFromCart,
+        clearCart,
+        getItemQuantity,
+        favorites,
+        toggleFavorite,
+        isFavorite,
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
+};
+
+export const useCart = () => {
+  const context = useContext(CartContext);
+  if (!context) throw new Error('useCart must be used within CartProvider');
+  return context;
+};
