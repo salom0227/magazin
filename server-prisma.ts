@@ -10,7 +10,7 @@ import type { User, Product, Category, Order, AdminStats, OrderStatus, ProductRe
 
 const prisma = new PrismaClient();
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 if (!process.env.JWT_SECRET) {
   console.error("CRITICAL: JWT_SECRET environment variable is missing.");
   process.exit(1);
@@ -842,13 +842,27 @@ app.put("/api/admin/users/:id/block", authMiddleware, adminMiddleware, async (re
   }
 });
 
-// Vite serve
-const vite = await createViteServer({
-  server: { middlewareMode: true },
-  appType: "spa",
-});
-app.use(vite.middlewares);
+// Vite serve in development, static files in production
+const isProduction = process.env.NODE_ENV === "production";
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
-});
+async function startServer() {
+  if (isProduction) {
+    const distPath = path.resolve(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
+  } else {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();
