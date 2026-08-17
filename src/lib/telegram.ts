@@ -1,10 +1,15 @@
 import { Telegraf } from 'telegraf';
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+const CHAT_IDS = (process.env.TELEGRAM_CHAT_ID || '')
+  .split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
 
 export async function sendOrderNotification(order: any) {
   try {
+    if (CHAT_IDS.length === 0) return;
+
     const message = `
 🛒 <b>Yangi Buyurtma</b>
 
@@ -27,20 +32,26 @@ ${order.deliveryAddress.notes ? `📝 Izoh: ${order.deliveryAddress.notes}` : ''
 📅 <b>Vaqt:</b> ${new Date(order.createdAt).toLocaleString('uz-UZ')}
     `.trim();
 
-    await bot.telegram.sendMessage(CHAT_ID, message, {
-      parse_mode: 'HTML',
-    });
+    for (const chatId of CHAT_IDS) {
+      try {
+        await bot.telegram.sendMessage(chatId, message, {
+          parse_mode: 'HTML',
+        });
 
-    // Send location if available
-    if (order.deliveryAddress.latitude && order.deliveryAddress.longitude) {
-      await bot.telegram.sendLocation(
-        CHAT_ID,
-        order.deliveryAddress.latitude,
-        order.deliveryAddress.longitude
-      );
+        // Send location if available
+        if (order.deliveryAddress.latitude && order.deliveryAddress.longitude) {
+          await bot.telegram.sendLocation(
+            chatId,
+            order.deliveryAddress.latitude,
+            order.deliveryAddress.longitude
+          );
+        }
+      } catch (err) {
+        console.error(`❌ Failed to send Telegram notification to ${chatId}:`, err);
+      }
     }
 
-    console.log('✅ Telegram notification sent');
+    console.log('✅ Telegram notifications sent');
   } catch (error) {
     console.error('❌ Failed to send Telegram notification:', error);
     // Don't throw error - order should still be saved even if notification fails
