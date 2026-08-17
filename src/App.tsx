@@ -34,14 +34,43 @@ import { api } from './lib/api';
 import type { Product, Category, Order } from './types';
 
 const MainAppContent: React.FC = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, openAuthModal } = useAuth();
   const { isCartDrawerOpen } = useCart();
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<string>('home');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== 'undefined' && (window.location.pathname === '/admin' || window.location.pathname === '/admin/')) {
+      return 'admin';
+    }
+    return 'home';
+  });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'popular' | 'price_asc' | 'price_desc' | 'rating' | 'new'>('popular');
+
+  // Sync browser URL with activeTab
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (activeTab === 'admin' && window.location.pathname !== '/admin') {
+        window.history.pushState({}, '', '/admin');
+      } else if (activeTab !== 'admin' && window.location.pathname === '/admin') {
+        window.history.pushState({}, '', '/');
+      }
+    }
+  }, [activeTab]);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      if (window.location.pathname === '/admin' || window.location.pathname === '/admin/') {
+        setActiveTab('admin');
+      } else {
+        setActiveTab('home');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Data
   const [products, setProducts] = useState<Product[]>([]);
@@ -91,12 +120,22 @@ const MainAppContent: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Auto prompt login if visiting /admin as non-admin
+  useEffect(() => {
+    if (activeTab === 'admin' && !isAdmin) {
+      openAuthModal('login');
+    }
+  }, [activeTab, isAdmin, openAuthModal]);
+
   // If Admin tab is selected and user is admin
   if (activeTab === 'admin' && isAdmin) {
     return (
       <AdminPanel
         categories={categories}
-        onExitAdmin={() => setActiveTab('home')}
+        onExitAdmin={() => {
+          if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+          setActiveTab('home');
+        }}
         onRefreshData={loadData}
       />
     );
