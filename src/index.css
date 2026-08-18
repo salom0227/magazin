@@ -27,8 +27,13 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-#root {
-  overflow-x: clip;
+/* Images shouldn't intercept vertical swipe/drag gestures as a native "drag the
+   picture" action — that stops the page from scrolling when the gesture starts
+   on top of an image (very noticeable on the hero banner and product photos). */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+  touch-action: pan-y;
 }
 
 /* iOS safe-area padding for elements pinned to the bottom (home indicator) */
