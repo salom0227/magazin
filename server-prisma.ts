@@ -195,6 +195,19 @@ function adminMiddleware(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Middleware: identifies the user if a valid token is sent, but never
+// blocks the request — used for endpoints like checkout that must work
+// for both guests and logged-in users, while still tying the order to
+// the account when one exists.
+function optionalAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const decoded = verifyToken(authHeader.substring(7));
+    if (decoded) (req as any).user = decoded;
+  }
+  next();
+}
+
 // API: Categories
 app.get("/api/categories", async (req, res) => {
   try {
@@ -559,9 +572,14 @@ app.get("/api/orders/user", authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/api/orders", async (req, res) => {
+app.post("/api/orders", optionalAuthMiddleware, async (req, res) => {
   try {
     const { items, customer, deliveryAddress, paymentMethod } = req.body;
+    // Trust the server-verified session, not a client-supplied userId —
+    // this is also what makes the order show up under "Mening
+    // buyurtmalarim" for logged-in users. Guests (no valid token) still
+    // get userId: null and can check their order by its number/phone.
+    const authenticatedUserId = (req as any).user?.id || null;
     
     const order = await prisma.$transaction(async (tx) => {
       let subtotal = 0;
@@ -603,7 +621,7 @@ app.post("/api/orders", async (req, res) => {
       return await tx.order.create({
         data: {
           orderNumber,
-          userId: customer.userId || null,
+          userId: authenticatedUserId,
           firstName: customer.firstName,
           lastName: customer.lastName,
           phone: customer.phone,
@@ -974,6 +992,80 @@ app.delete("/api/categories/:id", authMiddleware, adminMiddleware, async (req, r
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Toifa o'chirishda xatolik" });
+  }
+});
+
+// API: Banners (bosh sahifadagi slayder)
+app.get("/api/banners", async (req, res) => {
+  try {
+    const banners = await prisma.banner.findMany({
+      where: { isActive: true },
+      orderBy: { order: 'asc' },
+    });
+    res.json(banners);
+  } catch (error) {
+    res.status(500).json({ error: "Bannerlarni olishda xatolik" });
+  }
+});
+
+app.get("/api/admin/banners", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const banners = await prisma.banner.findMany({ orderBy: { order: 'asc' } });
+    res.json(banners);
+  } catch (error) {
+    res.status(500).json({ error: "Bannerlarni olishda xatolik" });
+  }
+});
+
+app.post("/api/banners", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const {
+      tag, titleLine1, titleLine2, titleAccent, subtitle, badge,
+      categorySlug, image, productHighlights, order, isActive,
+    } = req.body;
+    if (!titleLine1 || !image) {
+      return res.status(400).json({ error: "Sarlavha va rasm majburiy" });
+    }
+    const banner = await prisma.banner.create({
+      data: {
+        tag, titleLine1, titleLine2, titleAccent, subtitle, badge,
+        categorySlug, image,
+        productHighlights: productHighlights || [],
+        order: order ?? 0,
+        isActive: isActive ?? true,
+      },
+    });
+    res.json(banner);
+  } catch (error) {
+    res.status(500).json({ error: "Banner yaratishda xatolik" });
+  }
+});
+
+app.put("/api/banners/:id", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const {
+      tag, titleLine1, titleLine2, titleAccent, subtitle, badge,
+      categorySlug, image, productHighlights, order, isActive,
+    } = req.body;
+    const banner = await prisma.banner.update({
+      where: { id: req.params.id },
+      data: {
+        tag, titleLine1, titleLine2, titleAccent, subtitle, badge,
+        categorySlug, image, productHighlights, order, isActive,
+      },
+    });
+    res.json(banner);
+  } catch (error) {
+    res.status(500).json({ error: "Banner yangilashda xatolik" });
+  }
+});
+
+app.delete("/api/banners/:id", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    await prisma.banner.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Bannerni o'chirishda xatolik" });
   }
 });
 

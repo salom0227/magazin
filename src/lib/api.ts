@@ -1,4 +1,4 @@
-import type { User, Product, Category, Order, AdminStats, AuthResponse, Currency } from '../types';
+import type { User, Product, Category, Order, AdminStats, AuthResponse, Currency, Banner } from '../types';
 
 const API_BASE = '/api';
 
@@ -172,6 +172,50 @@ export const api = {
     });
     if (res.ok) return await res.json();
     return parseErrorAndThrow(res, "Kategoriyani o'chirishda xatolik");
+  },
+
+  // Banners
+  async getBanners(): Promise<Banner[]> {
+    const res = await fetch(`${API_BASE}/banners`);
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, 'Bannerlarni yuklashda xatolik');
+  },
+
+  async getAdminBanners(): Promise<Banner[]> {
+    const res = await fetch(`${API_BASE}/admin/banners`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, 'Bannerlarni yuklashda xatolik');
+  },
+
+  async createBanner(banner: Partial<Banner>): Promise<Banner> {
+    const res = await fetch(`${API_BASE}/banners`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(banner),
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, "Banner qo'shishda xatolik");
+  },
+
+  async updateBanner(id: string, banner: Partial<Banner>): Promise<Banner> {
+    const res = await fetch(`${API_BASE}/banners/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(banner),
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, 'Bannerni yangilashda xatolik');
+  },
+
+  async deleteBanner(id: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/banners/${id}`, {
+      method: 'DELETE',
+      headers: { ...getAuthHeader() },
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, "Bannerni o'chirishda xatolik");
   },
 
   // Orders

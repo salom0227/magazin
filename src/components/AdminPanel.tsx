@@ -17,9 +17,11 @@ import {
   Check,
   ChevronDown,
   Layers,
-  Coins
+  Coins,
+  Image as ImageIcon,
+  GripVertical
 } from 'lucide-react';
-import type { AdminStats, Product, Order, User, Category, OrderStatus, Currency, ProductVariant } from '../types';
+import type { AdminStats, Product, Order, User, Category, OrderStatus, Currency, ProductVariant, Banner } from '../types';
 import { formatPrice, formatDate, formatPhone } from '../lib/formatters';
 import { api } from '../lib/api';
 import { useToast } from '../context/ToastContext';
@@ -36,7 +38,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onRefreshData,
 }) => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'currencies'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'currencies' | 'categories' | 'banners'>('dashboard');
 
   // Stats
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -57,6 +59,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Currencies
   const [currencies, setCurrencies] = useState<Currency[]>([]);
+
+  // Categories
+  const [categoryList, setCategoryList] = useState<Category[]>(categories);
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [currentCategory, setCurrentCategory] = useState<Partial<Category> | null>(null);
+  const [categoryImageUpload, setCategoryImageUpload] = useState<string | null>(null);
+
+  // Banners
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [isEditingBanner, setIsEditingBanner] = useState(false);
+  const [currentBanner, setCurrentBanner] = useState<Partial<Banner> | null>(null);
+  const [bannerImageUpload, setBannerImageUpload] = useState<string | null>(null);
 
   // Image upload
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
@@ -117,12 +131,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  // Fetch Categories (admin-managed list)
+  const loadCategories = async () => {
+    try {
+      const data = await api.getCategories();
+      setCategoryList(data);
+    } catch (err: any) {
+      showToast(err.message || 'Kategoriyalarni yuklashda xatolik', 'error');
+    }
+  };
+
+  // Fetch Banners
+  const loadBanners = async () => {
+    try {
+      const data = await api.getAdminBanners();
+      setBanners(data);
+    } catch (err: any) {
+      showToast(err.message || 'Bannerlarni yuklashda xatolik', 'error');
+    }
+  };
+
   useEffect(() => {
     loadStats();
     loadProducts();
     loadOrders();
     loadUsers();
     loadCurrencies();
+    loadCategories();
+    loadBanners();
   }, []);
 
   // Handle Image Upload
@@ -143,6 +179,132 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const removeImage = (index: number) => {
     setUploadedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Single-image upload helper, used by Category & Banner forms
+  const handleSingleImageUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (dataUrl: string) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target && typeof event.target.result === 'string') {
+        setter(event.target.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Category Save (Create or Update)
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentCategory || !currentCategory.name || !currentCategory.slug) {
+      showToast("Nomi va slug (url) maydonlari majburiy", 'error');
+      return;
+    }
+    const image = categoryImageUpload || currentCategory.image;
+    if (!image) {
+      showToast('Kategoriya uchun rasm tanlang', 'error');
+      return;
+    }
+    try {
+      if (currentCategory.id) {
+        await api.updateCategory(currentCategory.id, { ...currentCategory, image });
+        showToast('Kategoriya yangilandi', 'success');
+      } else {
+        await api.createCategory({
+          name: currentCategory.name,
+          slug: currentCategory.slug,
+          iconName: currentCategory.iconName || 'Folder',
+          image,
+          isActive: true,
+        });
+        showToast("Kategoriya qo'shildi", 'success');
+      }
+      loadCategories();
+      if (onRefreshData) onRefreshData();
+      setIsEditingCategory(false);
+      setCurrentCategory(null);
+      setCategoryImageUpload(null);
+    } catch (err: any) {
+      showToast(err.message || 'Xatolik yuz berdi', 'error');
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!window.confirm("Rostdan ham ushbu kategoriyani o'chirmoqchimisiz?")) return;
+    try {
+      await api.deleteCategory(id);
+      showToast("Kategoriya o'chirildi", 'success');
+      loadCategories();
+      if (onRefreshData) onRefreshData();
+    } catch (err: any) {
+      showToast(err.message || "O'chirishda xatolik", 'error');
+    }
+  };
+
+  const handleToggleCategoryActive = async (cat: Category) => {
+    try {
+      await api.updateCategory(cat.id, { isActive: !cat.isActive });
+      loadCategories();
+      if (onRefreshData) onRefreshData();
+      showToast('Holat yangilandi', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Xatolik yuz berdi', 'error');
+    }
+  };
+
+  // Handle Banner Save (Create or Update)
+  const handleSaveBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentBanner || !currentBanner.titleLine1) {
+      showToast('Sarlavha (1-qator) majburiy', 'error');
+      return;
+    }
+    const image = bannerImageUpload || currentBanner.image;
+    if (!image) {
+      showToast('Banner uchun rasm tanlang', 'error');
+      return;
+    }
+    try {
+      const payload = { ...currentBanner, image };
+      if (currentBanner.id) {
+        await api.updateBanner(currentBanner.id, payload);
+        showToast('Banner yangilandi', 'success');
+      } else {
+        await api.createBanner(payload);
+        showToast("Banner qo'shildi", 'success');
+      }
+      loadBanners();
+      setIsEditingBanner(false);
+      setCurrentBanner(null);
+      setBannerImageUpload(null);
+    } catch (err: any) {
+      showToast(err.message || 'Xatolik yuz berdi', 'error');
+    }
+  };
+
+  const handleDeleteBanner = async (id: string) => {
+    if (!window.confirm("Rostdan ham ushbu bannerni o'chirmoqchimisiz?")) return;
+    try {
+      await api.deleteBanner(id);
+      showToast("Banner o'chirildi", 'success');
+      loadBanners();
+    } catch (err: any) {
+      showToast(err.message || "O'chirishda xatolik", 'error');
+    }
+  };
+
+  const handleToggleBannerActive = async (banner: Banner) => {
+    try {
+      await api.updateBanner(banner.id, { isActive: !banner.isActive });
+      loadBanners();
+      showToast('Holat yangilandi', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Xatolik yuz berdi', 'error');
+    }
   };
 
   // Handle Product Save (Create or Update)
@@ -277,6 +439,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('categories')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'categories'
+                ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] shadow-md'
+                : 'bg-[#12221a] hover:bg-[#183124] text-gray-300 border border-[#234233]'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Kategoriyalar ({categoryList.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('banners')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'banners'
+                ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] shadow-md'
+                : 'bg-[#12221a] hover:bg-[#183124] text-gray-300 border border-[#234233]'
+            }`}
+          >
+            <ImageIcon className="w-4 h-4" />
+            <span>Bannerlar ({banners.length})</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('currencies')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'currencies'
@@ -362,7 +548,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <p className="text-xl sm:text-2xl font-extrabold text-white font-serif">
                   {stats.totalProducts} ta
                 </p>
-                <p className="text-[11px] text-gray-400">{categories.length} ta kategoriya</p>
+                <p className="text-[11px] text-gray-400">{categoryList.length} ta kategoriya</p>
               </div>
 
               <div className="p-5 bg-[#0f1d17] rounded-2xl border border-[#234233] space-y-2 shadow-lg">
@@ -810,7 +996,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <select
                     value={currentProduct.categorySlug || currentProduct.category || 'smartphones'}
                     onChange={(e) => {
-                      const selected = categories.find((c) => c.slug === e.target.value);
+                      const selected = categoryList.find((c) => c.slug === e.target.value);
                       setCurrentProduct({
                         ...currentProduct,
                         category: e.target.value,
@@ -820,7 +1006,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     }}
                     className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f] cursor-pointer"
                   >
-                    {categories.map((c) => (
+                    {categoryList.map((c) => (
                       <option key={c.id} value={c.slug}>
                         {c.name}
                       </option>
@@ -1017,6 +1203,373 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Categories */}
+      {activeTab === 'categories' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Layers className="w-5 h-5 text-[#dfbe9f]" />
+              <span>Kategoriyalar</span>
+            </h2>
+            <button
+              onClick={() => {
+                setCurrentCategory({ name: '', slug: '', iconName: 'Folder', image: '' });
+                setCategoryImageUpload(null);
+                setIsEditingCategory(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] rounded-xl text-xs font-bold shadow-md hover:opacity-90 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Yangi kategoriya</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {categoryList.map((cat) => (
+              <div key={cat.id} className="bg-[#0f1d17] rounded-2xl border border-[#234233] overflow-hidden">
+                <div className="h-28 w-full bg-[#12221a] overflow-hidden">
+                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+                </div>
+                <div className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-white text-sm">{cat.name}</span>
+                    <button
+                      onClick={() => handleToggleCategoryActive(cat)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer ${
+                        cat.isActive
+                          ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-800/40'
+                          : 'bg-gray-800/40 text-gray-400 border border-gray-700/40'
+                      }`}
+                    >
+                      {cat.isActive ? 'Faol' : 'Nofaol'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-400">/{cat.slug} • {cat.productCount ?? 0} mahsulot</p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setCurrentCategory(cat);
+                        setCategoryImageUpload(null);
+                        setIsEditingCategory(true);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-[#12221a] hover:bg-[#183124] text-gray-200 rounded-lg text-xs font-semibold border border-[#234233] cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Tahrirlash</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCategory(cat.id)}
+                      className="flex items-center justify-center px-2.5 py-1.5 bg-red-950/40 hover:bg-red-900/50 text-red-400 rounded-lg border border-red-900/40 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {categoryList.length === 0 && (
+              <div className="col-span-full text-center py-10 text-gray-500 text-sm">
+                Hali kategoriya yo'q. "Yangi kategoriya" tugmasi orqali qo'shing.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Banners */}
+      {activeTab === 'banners' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-[#dfbe9f]" />
+              <span>Bosh sahifa bannerlari</span>
+            </h2>
+            <button
+              onClick={() => {
+                setCurrentBanner({
+                  titleLine1: '', productHighlights: [], order: banners.length, isActive: true,
+                });
+                setBannerImageUpload(null);
+                setIsEditingBanner(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] rounded-xl text-xs font-bold shadow-md hover:opacity-90 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Yangi banner</span>
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {banners.map((banner) => (
+              <div key={banner.id} className="bg-[#0f1d17] rounded-2xl border border-[#234233] p-4 flex items-center gap-4">
+                <GripVertical className="w-4 h-4 text-gray-600 shrink-0" />
+                <div className="w-24 h-16 rounded-xl overflow-hidden bg-[#12221a] shrink-0">
+                  <img src={banner.image} alt={banner.titleLine1} className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-white text-sm truncate">
+                    {banner.titleLine1} {banner.titleLine2}
+                  </p>
+                  <p className="text-[11px] text-gray-400 truncate">{banner.subtitle || banner.tag || '—'}</p>
+                </div>
+                <button
+                  onClick={() => handleToggleBannerActive(banner)}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold shrink-0 cursor-pointer ${
+                    banner.isActive
+                      ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-800/40'
+                      : 'bg-gray-800/40 text-gray-400 border border-gray-700/40'
+                  }`}
+                >
+                  {banner.isActive ? 'Faol' : 'Nofaol'}
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentBanner(banner);
+                    setBannerImageUpload(null);
+                    setIsEditingBanner(true);
+                  }}
+                  className="p-2 bg-[#12221a] hover:bg-[#183124] text-gray-200 rounded-lg border border-[#234233] cursor-pointer shrink-0"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDeleteBanner(banner.id)}
+                  className="p-2 bg-red-950/40 hover:bg-red-900/50 text-red-400 rounded-lg border border-red-900/40 cursor-pointer shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            {banners.length === 0 && (
+              <div className="text-center py-10 text-gray-500 text-sm">
+                Hali banner yo'q. "Yangi banner" tugmasi orqali qo'shing.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add/Edit Category */}
+      {isEditingCategory && currentCategory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+          <div className="bg-[#0f1d17] border border-[#234233] rounded-3xl max-w-lg w-full p-6 space-y-4 my-auto shadow-2xl text-gray-100">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1c3629]">
+              <h3 className="font-bold font-serif text-base text-white">
+                {currentCategory.id ? 'Kategoriyani tahrirlash' : "Yangi kategoriya qo'shish"}
+              </h3>
+              <button
+                onClick={() => { setIsEditingCategory(false); setCurrentCategory(null); }}
+                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-[#1a3327] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCategory} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-gray-300 mb-1 font-semibold">Nomi *</label>
+                <input
+                  type="text"
+                  value={currentCategory.name || ''}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setCurrentCategory((prev) => {
+                      const next = { ...prev, name };
+                      // Auto-fill slug from name only while creating a new category
+                      if (!prev?.id) {
+                        next.slug = name.toLowerCase().trim()
+                          .replace(/[^a-z0-9\s-]/g, '')
+                          .replace(/\s+/g, '-');
+                      }
+                      return next;
+                    });
+                  }}
+                  className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-300 mb-1 font-semibold">Slug (url) *</label>
+                <input
+                  type="text"
+                  value={currentCategory.slug || ''}
+                  onChange={(e) => setCurrentCategory({ ...currentCategory, slug: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-300 mb-1 font-semibold">Rasm *</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleSingleImageUpload(e, setCategoryImageUpload)}
+                  className="w-full text-gray-300 text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#dfbe9f] file:text-[#0d1713] file:font-bold file:cursor-pointer cursor-pointer"
+                />
+                {(categoryImageUpload || currentCategory.image) && (
+                  <img
+                    src={categoryImageUpload || currentCategory.image}
+                    alt="Preview"
+                    className="mt-2 w-full h-28 object-cover rounded-xl border border-[#234233]"
+                  />
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsEditingCategory(false); setCurrentCategory(null); }}
+                  className="flex-1 px-4 py-2.5 bg-[#12221a] hover:bg-[#183124] text-gray-200 rounded-xl font-semibold border border-[#234233] cursor-pointer"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] rounded-xl font-bold shadow-md hover:opacity-90 cursor-pointer"
+                >
+                  Saqlash
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add/Edit Banner */}
+      {isEditingBanner && currentBanner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+          <div className="bg-[#0f1d17] border border-[#234233] rounded-3xl max-w-xl w-full p-6 space-y-4 my-auto shadow-2xl text-gray-100">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1c3629]">
+              <h3 className="font-bold font-serif text-base text-white">
+                {currentBanner.id ? 'Bannerni tahrirlash' : "Yangi banner qo'shish"}
+              </h3>
+              <button
+                onClick={() => { setIsEditingBanner(false); setCurrentBanner(null); }}
+                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-[#1a3327] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBanner} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-300 mb-1 font-semibold">Ustki teg (masalan: YANGI TO'PLAM)</label>
+                  <input
+                    type="text"
+                    value={currentBanner.tag || ''}
+                    onChange={(e) => setCurrentBanner({ ...currentBanner, tag: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-300 mb-1 font-semibold">Kichik nishon (masalan: Tez yetkazib berish)</label>
+                  <input
+                    type="text"
+                    value={currentBanner.badge || ''}
+                    onChange={(e) => setCurrentBanner({ ...currentBanner, badge: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-300 mb-1 font-semibold">Sarlavha, 1-qator *</label>
+                  <input
+                    type="text"
+                    value={currentBanner.titleLine1 || ''}
+                    onChange={(e) => setCurrentBanner({ ...currentBanner, titleLine1: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-300 mb-1 font-semibold">Sarlavha, 2-qator</label>
+                  <input
+                    type="text"
+                    value={currentBanner.titleLine2 || ''}
+                    onChange={(e) => setCurrentBanner({ ...currentBanner, titleLine2: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-gray-300 mb-1 font-semibold">Urg'u so'z (rangli qism)</label>
+                  <input
+                    type="text"
+                    value={currentBanner.titleAccent || ''}
+                    onChange={(e) => setCurrentBanner({ ...currentBanner, titleAccent: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-gray-300 mb-1 font-semibold">Qisqa tavsif</label>
+                  <textarea
+                    value={currentBanner.subtitle || ''}
+                    onChange={(e) => setCurrentBanner({ ...currentBanner, subtitle: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-300 mb-1 font-semibold">Bosilganda o'tadigan kategoriya</label>
+                  <select
+                    value={currentBanner.categorySlug || ''}
+                    onChange={(e) => setCurrentBanner({ ...currentBanner, categorySlug: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f]"
+                  >
+                    <option value="">— tanlanmagan —</option>
+                    {categoryList.map((c) => (
+                      <option key={c.id} value={c.slug}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-300 mb-1 font-semibold">Tartib raqami</label>
+                  <input
+                    type="number"
+                    value={currentBanner.order ?? 0}
+                    onChange={(e) => setCurrentBanner({ ...currentBanner, order: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-gray-300 mb-1 font-semibold">Rasm *</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleSingleImageUpload(e, setBannerImageUpload)}
+                    className="w-full text-gray-300 text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#dfbe9f] file:text-[#0d1713] file:font-bold file:cursor-pointer cursor-pointer"
+                  />
+                  {(bannerImageUpload || currentBanner.image) && (
+                    <img
+                      src={bannerImageUpload || currentBanner.image}
+                      alt="Preview"
+                      className="mt-2 w-full h-32 object-cover rounded-xl border border-[#234233]"
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsEditingBanner(false); setCurrentBanner(null); }}
+                  className="flex-1 px-4 py-2.5 bg-[#12221a] hover:bg-[#183124] text-gray-200 rounded-xl font-semibold border border-[#234233] cursor-pointer"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] rounded-xl font-bold shadow-md hover:opacity-90 cursor-pointer"
+                >
+                  Saqlash
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

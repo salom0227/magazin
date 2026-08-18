@@ -64,6 +64,21 @@ export interface Category {
   productCount?: number;
 }
 
+export interface Banner {
+  id: string;
+  tag?: string;
+  titleLine1: string;
+  titleLine2?: string;
+  titleAccent?: string;
+  subtitle?: string;
+  badge?: string;
+  categorySlug?: string;
+  image: string;
+  productHighlights: string[];
+  order: number;
+  isActive: boolean;
+}
+
 export interface ProductReview {
   id: string;
   userId: string;

@@ -64,6 +64,23 @@ model Category {
   products     Product[]
 }
 
+model Banner {
+  id                String   @id @default(cuid())
+  tag               String?
+  titleLine1        String
+  titleLine2        String?
+  titleAccent       String?
+  subtitle          String?
+  badge             String?
+  categorySlug      String?
+  image             String
+  productHighlights String[] @default([])
+  order             Int      @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
 model Product {
   id           String   @id @default(cuid())
   name         String
