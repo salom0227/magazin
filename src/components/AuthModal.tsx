@@ -11,7 +11,6 @@ export const AuthModal: React.FC = () => {
     setAuthModalTab,
     login,
     register,
-    quickDemoLogin,
     isLoading,
   } = useAuth();
 

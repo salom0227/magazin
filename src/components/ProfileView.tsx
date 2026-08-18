@@ -11,7 +11,6 @@ import {
   Plus,
   Trash2,
   CheckCircle2,
-  Sparkles,
   ShoppingBag
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -30,7 +29,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onGoToFavorites,
   onGoToAdmin,
 }) => {
-  const { user, isAdmin, logout, updateProfile, addAddress, deleteAddress, quickDemoLogin } = useAuth();
+  const { user, isAdmin, logout, updateProfile, addAddress, deleteAddress } = useAuth();
   const { favorites } = useCart();
   const { showToast } = useToast();
 
@@ -360,38 +359,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         ) : (
           <p className="text-xs text-gray-500 italic">Hozircha saqlangan manzillar yo'q</p>
         )}
-      </div>
-
-      {/* Switch Demo Profiles Helper */}
-      <div className="bg-[#12221a] border border-[#234233] rounded-2xl p-5 space-y-2.5">
-        <div className="flex items-center gap-2 text-xs font-bold text-[#dfbe9f]">
-          <Sparkles className="w-4 h-4 text-[#dfbe9f]" />
-          <span>Sinov uchun hisoblar orasida tezkor almashish:</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => quickDemoLogin('user')}
-            className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-              user.phone === '+998991234567'
-                ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] border-[#dfbe9f] font-bold shadow-md'
-                : 'bg-[#14281e] text-[#dfbe9f] border-[#234233] hover:bg-[#1a3528]'
-            }`}
-          >
-            Mijoz hisobi (Shahzod Q.)
-          </button>
-          <button
-            type="button"
-            onClick={() => quickDemoLogin('admin')}
-            className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-              user.phone === '+998901234567'
-                ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] border-[#dfbe9f] font-bold shadow-md'
-                : 'bg-[#14281e] text-[#dfbe9f] border-[#234233] hover:bg-[#1a3528]'
-            }`}
-          >
-            Admin hisobi (Boshqaruvchi)
-          </button>
-        </div>
       </div>
     </div>
   );

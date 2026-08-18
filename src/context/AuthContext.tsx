@@ -21,7 +21,6 @@ interface AuthContextType {
   updateProfile: (profile: Partial<User>) => Promise<void>;
   addAddress: (address: any) => Promise<void>;
   deleteAddress: (id: string) => Promise<void>;
-  quickDemoLogin: (role: 'admin' | 'user') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -132,14 +131,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const quickDemoLogin = async (role: 'admin' | 'user') => {
-    if (role === 'admin') {
-      await login('+998901234567', '1234');
-    } else {
-      await login('+998991234567', '1234');
-    }
-  };
-
   const logout = () => {
     localStorage.removeItem('zamon_token');
     setToken(null);
@@ -202,7 +193,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateProfile,
         addAddress,
         deleteAddress,
-        quickDemoLogin,
       }}
     >
       {children}
