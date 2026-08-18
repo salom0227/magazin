@@ -86,9 +86,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   const isFav = product ? isFavorite(product.id) : false;
   const currentVariant = product?.variants?.find(v => v.id === selectedVariant);
+  // A wholesale price only counts as "real" when it's actually different from the retail price.
+  // Otherwise both toggle buttons would show the exact same number, which reads as a bug.
+  const hasDistinctWholesale = currentVariant
+    ? currentVariant.wholesalePrice !== currentVariant.retailPrice
+    : !!(product?.wholesalePrice && product.wholesalePrice !== (product?.piecePrice || product?.price));
+  const effectivePriceType = hasDistinctWholesale ? priceType : 'piece';
   const currentPrice = currentVariant
-    ? (priceType === 'wholesale' ? currentVariant.wholesalePrice : currentVariant.retailPrice)
-    : (priceType === 'wholesale' ? (product?.wholesalePrice || product?.price) : (product?.piecePrice || product?.price));
+    ? (effectivePriceType === 'wholesale' ? currentVariant.wholesalePrice : currentVariant.retailPrice)
+    : (effectivePriceType === 'wholesale' ? (product?.wholesalePrice as number) : (product?.piecePrice || product?.price));
   const currentStock = currentVariant?.stock || product?.stock || 0;
 
   const handleBuyNow = () => {
@@ -249,31 +255,33 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </div>
                     )}
 
-                    {/* Price Type Selector */}
-                    <div className="flex gap-2 mb-3">
-                      <button
-                        type="button"
-                        onClick={() => setPriceType('piece')}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          priceType === 'piece'
-                            ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713]'
-                            : 'bg-[#1a3327] text-gray-400 border border-[#2b4c3b]'
-                        }`}
-                      >
-                        Dona narxi
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPriceType('wholesale')}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          priceType === 'wholesale'
-                            ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713]'
-                            : 'bg-[#1a3327] text-gray-400 border border-[#2b4c3b]'
-                        }`}
-                      >
-                        Optom narxi
-                      </button>
-                    </div>
+                    {/* Price Type Selector — only shown when wholesale price actually differs from retail */}
+                    {hasDistinctWholesale && (
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setPriceType('piece')}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            priceType === 'piece'
+                              ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713]'
+                              : 'bg-[#1a3327] text-gray-400 border border-[#2b4c3b]'
+                          }`}
+                        >
+                          Dona narxi
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPriceType('wholesale')}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            priceType === 'wholesale'
+                              ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713]'
+                              : 'bg-[#1a3327] text-gray-400 border border-[#2b4c3b]'
+                          }`}
+                        >
+                          Optom narxi
+                        </button>
+                      </div>
+                    )}
 
                     <div className="flex items-baseline gap-3">
                       <span className="text-2xl sm:text-3xl font-extrabold text-[#dfbe9f] tracking-tight">

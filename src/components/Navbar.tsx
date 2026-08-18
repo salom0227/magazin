@@ -115,7 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <div className="hidden lg:flex items-center gap-1.5 text-gray-400">
               <span>Aloqa:</span>
-              <strong className="text-gray-200">+998 71 200-00-20</strong>
+              <a href="tel:+998977525233" className="text-gray-200 font-bold hover:text-[#dfbe9f] transition-colors">+998 97 752-52-33</a>
             </div>
 
             <div className="flex items-center gap-1 text-gray-300 cursor-pointer hover:text-white">

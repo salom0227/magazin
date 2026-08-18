@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag, ShieldCheck, Truck, RotateCcw, Headphones, ArrowUpRight, Sparkles } from 'lucide-react';
+import { ShoppingBag, ShieldCheck, Truck, RotateCcw, Headphones, ArrowUpRight, Sparkles, MapPin, Send } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   return (
@@ -52,8 +52,23 @@ export const Footer: React.FC = () => {
           {/* Col 4: Aloqa va To'lov */}
           <div className="space-y-3">
             <h4 className="font-bold text-white text-xs uppercase tracking-wider">Mijozlar xizmati</h4>
-            <p className="text-gray-300 font-semibold text-sm">+998 71 200-00-20</p>
-            <p className="text-[11px] text-gray-400">Har kuni: 09:00 dan 21:00 gacha</p>
+            <p className="text-gray-300 font-semibold text-sm">
+              <a href="tel:+998977525233" className="hover:text-[#dfbe9f] transition-colors">+998 97 752-52-33</a>
+            </p>
+            <p className="text-[11px] text-gray-400">Ish vaqti: 17:30 gacha</p>
+            <div className="flex items-start gap-1.5 text-[11px] text-gray-400">
+              <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#dfbe9f]" />
+              <span>Orikzor savdo markazi, 3-pavilion, 65-do'kon</span>
+            </div>
+            <a
+              href="https://t.me/Orizor752"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-[#dfbe9f] transition-colors w-fit"
+            >
+              <Send className="w-3.5 h-3.5 text-[#dfbe9f]" />
+              <span>@Orizor752</span>
+            </a>
 
             <div className="pt-2 flex flex-wrap gap-1.5">
               <span className="px-2.5 py-1 bg-[#12221a] border border-[#234233] rounded-lg text-gray-200 font-bold text-[10px]">
