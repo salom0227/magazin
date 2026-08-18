@@ -27,13 +27,13 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Images shouldn't intercept vertical swipe/drag gestures as a native "drag the
-   picture" action — that stops the page from scrolling when the gesture starts
-   on top of an image (very noticeable on the hero banner and product photos). */
+/* Prevent the native "drag the picture" gesture on images, without touching
+   touch-action — an explicit touch-action: pan-y here was blocking vertical
+   scroll entirely on Chrome/mobile when a swipe started on an image (hero
+   banner, product photos), while Firefox tolerated it. */
 img {
   -webkit-user-drag: none;
   user-select: none;
-  touch-action: pan-y;
 }
 
 /* iOS safe-area padding for elements pinned to the bottom (home indicator) */
