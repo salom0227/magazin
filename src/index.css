@@ -16,15 +16,21 @@
   font-family: 'Cormorant Garamond', Georgia, serif;
 }
 
-/* Prevent unwanted horizontal scroll/bounce and give the app a native feel */
+/* Prevent unwanted horizontal scroll and give the app a native feel.
+   IMPORTANT: do NOT put `-webkit-overflow-scrolling: touch` or
+   `overscroll-behavior-y: contain` on html/body. That combo is a well-known
+   cause of frozen/dead vertical scrolling inside WebKit-based in-app browsers
+   (Telegram, Instagram, Facebook — all use WKWebView on iOS): the property is
+   only meant for inner elements with `overflow-y: scroll`, and applying it to
+   the page root itself can silently kill native touch scrolling while click
+   handlers keep working fine. Regular Chrome/Safari tabs are unaffected,
+   which is exactly why this bug only shows up when the link is opened from
+   inside Telegram and not in a normal browser.
+   html and body must be allowed to scroll normally (no overflow-y override,
+   no touch-scrolling hint, no overscroll containment). */
 html, body {
   overflow-x: hidden;
-  overscroll-behavior-y: contain;
   -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  -webkit-overflow-scrolling: touch;
 }
 
 /* Prevent the native "drag the picture" gesture on images, without touching

@@ -106,6 +106,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         center: [coords.lat, coords.lng],
         zoom: 14,
         zoomControl: false,
+        scrollWheelZoom: false, // sahifa scroll'i xarita ustida bloklanmasin
       });
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
