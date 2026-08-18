@@ -19,9 +19,12 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { formatPrice } from '../lib/formatters';
-import { LocationPickerMap } from './LocationPickerMap';
 import { api } from '../lib/api';
 import type { Order } from '../types';
+
+// Leaflet (LocationPickerMap) is a heavy dependency only needed during checkout —
+// keep it out of the main bundle so the initial page load stays light on mobile.
+const LocationPickerMap = React.lazy(() => import('./LocationPickerMap').then(m => ({ default: m.LocationPickerMap })));
 
 interface CheckoutModalProps {
   onOrderSuccess: (order: Order) => void;
@@ -258,11 +261,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onOrderSuccess }) 
                 </div>
 
                 {/* Leaflet Map Location Picker */}
-                <LocationPickerMap
-                  initialLat={coords.latitude || 41.311081}
-                  initialLng={coords.longitude || 69.240562}
-                  onLocationSelect={handleLocationPicked}
-                />
+                <React.Suspense fallback={
+                  <div className="h-52 rounded-xl bg-[#12221a] border border-[#234233] animate-pulse flex items-center justify-center text-xs text-gray-500">
+                    Xarita yuklanmoqda...
+                  </div>
+                }>
+                  <LocationPickerMap
+                    initialLat={coords.latitude || 41.311081}
+                    initialLng={coords.longitude || 69.240562}
+                    onLocationSelect={handleLocationPicked}
+                  />
+                </React.Suspense>
 
                 {/* Manual Address Form Fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">

@@ -27,12 +27,15 @@ import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { OrdersView } from './components/OrdersView';
 import { ProfileView } from './components/ProfileView';
 import { FavoritesView } from './components/FavoritesView';
-import { AdminPanel } from './components/AdminPanel';
-import { AdminLoginView } from './components/AdminLoginView';
 import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
 import { api } from './lib/api';
 import type { Product, Category, Order } from './types';
+
+// Admin panel is heavy (tables, charts) and only needed by admins — split it out of the
+// main bundle so regular shoppers, especially on mobile, don't pay for its weight upfront.
+const AdminPanel = React.lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const AdminLoginView = React.lazy(() => import('./components/AdminLoginView').then(m => ({ default: m.AdminLoginView })));
 
 const MainAppContent: React.FC = () => {
   const { user, isAdmin, openAuthModal } = useAuth();
@@ -123,25 +126,34 @@ const MainAppContent: React.FC = () => {
 
   // If Admin tab is selected
   if (activeTab === 'admin') {
+    const adminFallback = (
+      <div className="min-h-screen flex items-center justify-center bg-[#0d1713]">
+        <RefreshCw className="w-6 h-6 text-[#dfbe9f] animate-spin" />
+      </div>
+    );
     if (isAdmin) {
       return (
-        <AdminPanel
-          categories={categories}
-          onExitAdmin={() => {
-            if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
-            setActiveTab('home');
-          }}
-          onRefreshData={loadData}
-        />
+        <React.Suspense fallback={adminFallback}>
+          <AdminPanel
+            categories={categories}
+            onExitAdmin={() => {
+              if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+              setActiveTab('home');
+            }}
+            onRefreshData={loadData}
+          />
+        </React.Suspense>
       );
     }
     return (
-      <AdminLoginView
-        onGoHome={() => {
-          if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
-          setActiveTab('home');
-        }}
-      />
+      <React.Suspense fallback={adminFallback}>
+        <AdminLoginView
+          onGoHome={() => {
+            if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+            setActiveTab('home');
+          }}
+        />
+      </React.Suspense>
     );
   }
 
