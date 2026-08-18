@@ -116,6 +116,8 @@ export const api = {
       if (res.ok) {
         return await res.json();
       }
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Foydalanuvchi ma\'lumotlarini olishda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const saved = localStorage.getItem('velora_user');
@@ -131,6 +133,8 @@ export const api = {
         body: JSON.stringify(profile),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Profilni yangilashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const current = await this.getMe();
@@ -147,6 +151,8 @@ export const api = {
         body: JSON.stringify(address),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Manzil qo\'shishda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const current = await this.getMe();
@@ -172,6 +178,8 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Manzilni o\'chirishda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const current = await this.getMe();
@@ -258,6 +266,8 @@ export const api = {
         body: JSON.stringify(product),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Mahsulot qo\'shishda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const prods = getLocalProducts();
@@ -295,6 +305,8 @@ export const api = {
         body: JSON.stringify(product),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Mahsulotni yangilashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const prods = getLocalProducts();
@@ -314,6 +326,8 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Mahsulotni o\'chirishda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const prods = getLocalProducts().filter((p) => p.id !== id);
@@ -329,6 +343,8 @@ export const api = {
         body: JSON.stringify({ rating, comment }),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Sharh yuborishda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const prods = getLocalProducts();
@@ -356,8 +372,10 @@ export const api = {
       const res = await fetch(`${API_BASE}/categories`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) return data;
+        return Array.isArray(data) ? data : getLocalCategories();
       }
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Kategoriyalarni yuklashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
     return getLocalCategories();
   },
@@ -370,6 +388,8 @@ export const api = {
         body: JSON.stringify(category),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Kategoriya qo\'shishda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const newCat: Category = {
@@ -392,6 +412,8 @@ export const api = {
         body: JSON.stringify(category),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Kategoriyani yangilashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return { ...mockCategories[0], ...category, id };
@@ -404,6 +426,8 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Kategoriyani o\'chirishda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return { message: 'Kategoriya o\'chirildi' };
@@ -490,6 +514,8 @@ export const api = {
           return data;
         }
       }
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Buyurtmalarni yuklashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return getLocalOrders();
@@ -501,6 +527,8 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Buyurtmani yuklashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const orders = getLocalOrders();
@@ -517,6 +545,8 @@ export const api = {
         body: JSON.stringify({ status, note }),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Buyurtma holatini yangilashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const orders = getLocalOrders();
@@ -544,6 +574,8 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Statistikani yuklashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     const orders = getLocalOrders();
@@ -589,15 +621,31 @@ export const api = {
         headers: { ...getAuthHeader() },
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Foydalanuvchilarni yuklashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return [mockDefaultUser, mockAdminUser];
   },
 
-  async toggleUserBlock(userId: string): Promise<{ user: User; message: string }> {
+  async toggleUserBlock(userId: string, isBlocked: boolean): Promise<{ user: User; message: string }> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${userId}/block`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify({ isBlocked }),
+      });
+      if (res.ok) {
+        const user = await res.json();
+        return { user, message: 'Foydalanuvchi holati yangilandi' };
+      }
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Foydalanuvchi holatini o\'zgartirishda xatolik');
+    } catch (e: any) { if (!import.meta.env.DEV) throw e; }
+
     return {
-      user: { ...mockDefaultUser, id: userId, isBlocked: false },
-      message: 'Foydalanuvchi holati yangilandi',
+      user: { ...mockDefaultUser, id: userId, isBlocked },
+      message: 'Foydalanuvchi holati yangilandi (DEV)',
     };
   },
 
@@ -605,6 +653,8 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/currencies`);
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Valyuta kurslarini yuklashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return [
@@ -623,6 +673,8 @@ export const api = {
         body: JSON.stringify(currency),
       });
       if (res.ok) return await res.json();
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Valyuta kursini yangilashda xatolik');
     } catch (e: any) { if (!import.meta.env.DEV) throw e; }
 
     return { id, code: 'USD', symbol: '$', rate: 12700, isActive: true };
