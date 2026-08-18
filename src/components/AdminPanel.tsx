@@ -747,9 +747,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                   <label className="block text-gray-300 mb-1 font-semibold">Chakana narxi (so'm) *</label>
                   <input
-                    type="number"
-                    value={currentProduct.price || 0}
-                    onChange={(e) => setCurrentProduct({ ...currentProduct, price: Number(e.target.value) })}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={currentProduct.price || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setCurrentProduct({ ...currentProduct, price: val ? Number(val) : 0 });
+                    }}
                     className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f]"
                     required
                   />
@@ -758,9 +763,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                   <label className="block text-gray-300 mb-1 font-semibold">Optom narxi (so'm)</label>
                   <input
-                    type="number"
-                    value={currentProduct.wholesalePrice || 0}
-                    onChange={(e) => setCurrentProduct({ ...currentProduct, wholesalePrice: Number(e.target.value) })}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={currentProduct.wholesalePrice || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setCurrentProduct({ ...currentProduct, wholesalePrice: val ? Number(val) : 0 });
+                    }}
                     className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f]"
                   />
                 </div>
@@ -768,9 +778,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                   <label className="block text-gray-300 mb-1 font-semibold">Dona narxi (so'm)</label>
                   <input
-                    type="number"
-                    value={currentProduct.piecePrice || 0}
-                    onChange={(e) => setCurrentProduct({ ...currentProduct, piecePrice: Number(e.target.value) })}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={currentProduct.piecePrice || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setCurrentProduct({ ...currentProduct, piecePrice: val ? Number(val) : 0 });
+                    }}
                     className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f]"
                   />
                 </div>
@@ -778,9 +793,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                   <label className="block text-gray-300 mb-1 font-semibold">Eski narxi (so'm)</label>
                   <input
-                    type="number"
-                    value={currentProduct.oldPrice || 0}
-                    onChange={(e) => setCurrentProduct({ ...currentProduct, oldPrice: Number(e.target.value) })}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={currentProduct.oldPrice || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setCurrentProduct({ ...currentProduct, oldPrice: val ? Number(val) : 0 });
+                    }}
                     className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f]"
                   />
                 </div>
@@ -811,9 +831,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                   <label className="block text-gray-300 mb-1 font-semibold">Mavjud zaxira (dona) *</label>
                   <input
-                    type="number"
-                    value={currentProduct.stock || 0}
-                    onChange={(e) => setCurrentProduct({ ...currentProduct, stock: Number(e.target.value) })}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={currentProduct.stock || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setCurrentProduct({ ...currentProduct, stock: val ? Number(val) : 0 });
+                    }}
                     className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f]"
                     required
                   />
@@ -949,10 +974,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </td>
                     <td className="px-4 py-3">
                       <input
-                        type="number"
-                        value={currency.rate}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={currency.rate || ''}
                         onChange={(e) => {
-                          const newRate = Number(e.target.value);
+                          const val = e.target.value.replace(/\D/g, '');
+                          const newRate = val ? Number(val) : 0;
                           api.updateCurrency(currency.id, { rate: newRate }).then(() => {
                             setCurrencies(currencies.map(c => 
                               c.id === currency.id ? { ...c, rate: newRate } : c
