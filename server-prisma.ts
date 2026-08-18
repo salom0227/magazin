@@ -22,6 +22,22 @@ const prisma = new PrismaClient({ adapter });
 
 const app = express();
 
+// Prisma stores firstName/lastName/phone as flat columns on Order, but the
+// frontend (and the Order type) expects a nested `customer` object. This
+// normalizes any Prisma order row (or array of rows) into that shape so
+// every endpoint that returns orders is consistent.
+function mapOrder(order: any) {
+  if (!order) return order;
+  const { firstName, lastName, phone, ...rest } = order;
+  return {
+    ...rest,
+    customer: { firstName, lastName, phone },
+  };
+}
+function mapOrders(orders: any[]) {
+  return orders.map(mapOrder);
+}
+
 // Diagnostic endpoint to check DB connection and tables
 app.get("/api/db-diagnose", async (req, res) => {
   try {
@@ -520,7 +536,7 @@ app.get("/api/orders", authMiddleware, adminMiddleware, async (req, res) => {
       },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(orders);
+    res.json(mapOrders(orders));
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch orders" });
   }
@@ -537,7 +553,7 @@ app.get("/api/orders/user", authMiddleware, async (req, res) => {
       },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(orders);
+    res.json(mapOrders(orders));
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch user orders" });
   }
@@ -634,7 +650,7 @@ app.post("/api/orders", async (req, res) => {
       console.error('Telegram API error:', e);
     }
 
-    res.json(order);
+    res.json(mapOrder(order));
   } catch (error: any) {
     console.error('Order creation error:', error);
     res.status(400).json({ error: error.message || "Failed to create order" });
@@ -658,7 +674,7 @@ app.put("/api/orders/:id/status", authMiddleware, adminMiddleware, async (req, r
       },
     });
 
-    res.json(order);
+    res.json(mapOrder(order));
   } catch (error) {
     res.status(500).json({ error: "Failed to update order status" });
   }
@@ -755,7 +771,7 @@ app.get("/api/admin/stats", authMiddleware, adminMiddleware, async (req, res) =>
       cancelledOrders,
       salesTrend,
       topProducts,
-      recentOrders: orders.slice(0, 10) as any,
+      recentOrders: mapOrders(orders.slice(0, 10)) as any,
     };
 
     res.json(stats);
@@ -976,7 +992,7 @@ app.get("/api/orders/:id", authMiddleware, async (req, res) => {
       return res.status(403).json({ error: "Ruxsat etilmagan" });
     }
     
-    res.json(order);
+    res.json(mapOrder(order));
   } catch (error) {
     res.status(500).json({ error: "Buyurtmani olishda xatolik" });
   }
