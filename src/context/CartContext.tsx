@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import type { CartItem, Product } from '../types';
 import { useToast } from './ToastContext';
+import { useAuth } from './AuthContext';
+import { api } from '../lib/api';
 import { getUnitPrice, FREE_DELIVERY_THRESHOLD, STANDARD_DELIVERY_FEE } from '../lib/pricing';
 
 interface CartContextType {
@@ -37,18 +39,30 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('zamon_favorites');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Sevimlilar avvalgi versiyada 'zamon_favorites' nomi bilan qurilma darajasida
+  // (localStorage) saqlanardi — hisobga (userId) umuman bog'liq emas edi. Shu
+  // sabab bitta qurilmani ikki mijoz ishlatsa (umumiy planshet/kompyuter),
+  // ikkinchisi birinchisining sevimlilar ro'yxatini ko'raverardi. Endi bu
+  // ro'yxat har doim serverdan, joriy tizimga kirgan hisobga (JWT token) qarab
+  // olinadi — pastdagi effect orqali.
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const { token, openAuthModal } = useAuth();
+  const prevTokenRef = useRef<string | null | undefined>(undefined);
 
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const { showToast } = useToast();
+
+  // Eski, hisobga bog'liq bo'lmagan sevimlilar keshini bir martalik tozalash —
+  // shu qurilmada avvalroq ishlatilgan boshqa mijoz ma'lumoti qolib
+  // ketmasligi uchun.
+  useEffect(() => {
+    try {
+      localStorage.removeItem('zamon_favorites');
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -58,13 +72,36 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [items]);
 
+  // Tizimga kirish/chiqish yoki hisob almashganda: savat shu qurilmada
+  // qolib, keyingi mijozga o'tib ketmasligi uchun tozalanadi. Sevimlilar
+  // esa quyidagi effectda serverdan qayta yuklanadi (yoki mehmon holatida
+  // bo'shatiladi) — ikkalasi ham endi hisobga bog'liq.
   useEffect(() => {
-    try {
-      localStorage.setItem('zamon_favorites', JSON.stringify(favorites));
-    } catch (e) {
-      console.error(e);
+    const prevToken = prevTokenRef.current;
+    prevTokenRef.current = token;
+    if (prevToken !== undefined && prevToken !== token) {
+      setItems([]);
     }
-  }, [favorites]);
+  }, [token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!token) {
+      setFavorites([]);
+      return;
+    }
+    api
+      .getFavorites()
+      .then((products) => {
+        if (!cancelled) setFavorites(products.map((p) => p.id));
+      })
+      .catch(() => {
+        if (!cancelled) setFavorites([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const addToCart = (product: Product, quantity = 1, options?: { color?: string; size?: string; unitPriceOverride?: number }) => {
     if (product.stock <= 0) {
@@ -156,16 +193,32 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const toggleFavorite = (productId: string) => {
-    setFavorites((prev) => {
-      const exists = prev.includes(productId);
-      if (exists) {
-        showToast('Saralangandan olib tashlandi', 'info');
-        return prev.filter((id) => id !== productId);
-      } else {
-        showToast('Saralanganlarga qo\'shildi', 'success');
-        return [...prev, productId];
-      }
-    });
+    // Sevimlilar hisobga bog'langani sabab, mehmon (tizimga kirmagan)
+    // holatda saqlab bo'lmaydi — avval tizimga kirishni so'raymiz.
+    if (!token) {
+      openAuthModal('login');
+      return;
+    }
+
+    const exists = favorites.includes(productId);
+    // Optimistic update: tugma darhol bosilgandek ko'rinadi, server
+    // javobini kutib turmaydi.
+    setFavorites((prev) =>
+      exists ? prev.filter((id) => id !== productId) : [...prev, productId]
+    );
+
+    const request = exists ? api.removeFavorite(productId) : api.addFavorite(productId);
+    request
+      .then(() => {
+        showToast(exists ? 'Saralangandan olib tashlandi' : "Saralanganlarga qo'shildi", exists ? 'info' : 'success');
+      })
+      .catch((err: any) => {
+        // Server so'rovi muvaffaqiyatsiz bo'lsa, mahalliy holatni orqaga qaytaramiz
+        setFavorites((prev) =>
+          exists ? [...prev, productId] : prev.filter((id) => id !== productId)
+        );
+        showToast(err?.message || 'Xatolik yuz berdi', 'error');
+      });
   };
 
   const isFavorite = (productId: string): boolean => {

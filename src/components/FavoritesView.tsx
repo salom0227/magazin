@@ -18,13 +18,19 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   const [favoriteProducts, setFavoriteProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // To'g'ridan-to'g'ri /api/favorites'dan yuklaydi (joriy hisobga bog'liq
+  // holda serverda filtrlangan) — oldingi versiyada mahsulotlarning faqat
+  // birinchi 50 tasi orasidan qidirilardi, shu sabab 50-o'rindan keyingi
+  // sevimli mahsulot umuman ko'rinmasdi.
   useEffect(() => {
     setIsLoading(true);
     api
-      .getProducts()
-      .then((data) => {
-        const matched = data.products.filter((p) => favorites.includes(p.id));
-        setFavoriteProducts(matched);
+      .getFavorites()
+      .then((products) => {
+        setFavoriteProducts(products);
+      })
+      .catch(() => {
+        setFavoriteProducts([]);
       })
       .finally(() => {
         setIsLoading(false);

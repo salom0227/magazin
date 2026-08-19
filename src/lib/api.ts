@@ -349,4 +349,34 @@ export const api = {
     if (res.ok) return await res.json();
     return parseErrorAndThrow(res, "Rasmni yuklashda xatolik");
   },
+
+  // Sevimlilar — har doim hisobga (userId) bog'liq holda serverdan olinadi,
+  // shu qurilmani ishlatgan boshqa mijozning ro'yxati bilan aralashib
+  // ketmasligi uchun localStorage'da SAQLANMAYDI.
+  async getFavorites(): Promise<Product[]> {
+    const res = await fetch(`${API_BASE}/favorites`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, "Sevimlilarni yuklashda xatolik");
+  },
+
+  async addFavorite(productId: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/favorites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ productId }),
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, "Sevimlilarga qo'shishda xatolik");
+  },
+
+  async removeFavorite(productId: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/favorites/${productId}`, {
+      method: 'DELETE',
+      headers: { ...getAuthHeader() },
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, "Sevimlilardan o'chirishda xatolik");
+  },
 };
