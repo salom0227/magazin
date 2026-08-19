@@ -60,6 +60,10 @@ syncCurrencyRates();
 setInterval(syncCurrencyRates, 6 * 60 * 60 * 1000);
 
 const app = express();
+// Render (and most PaaS hosts) sit behind a reverse proxy — without this, req.ip
+// resolves to the proxy's address for every visitor, which would make the admin-login
+// rate limiter below share one bucket across all users instead of one per real client.
+app.set('trust proxy', 1);
 
 // Prisma stores firstName/lastName/phone as flat columns on Order, but the
 // frontend (and the Order type) expects a nested `customer` object. This
@@ -67,18 +71,35 @@ const app = express();
 // every endpoint that returns orders is consistent.
 function mapOrder(order: any) {
   if (!order) return order;
-  const { firstName, lastName, phone, ...rest } = order;
+  const { firstName, lastName, phone, user, ...rest } = order;
   return {
     ...rest,
     customer: { firstName, lastName, phone },
+    ...(user !== undefined ? { user: sanitizeUser(user) } : {}),
   };
 }
 function mapOrders(orders: any[]) {
   return orders.map(mapOrder);
 }
 
-// Diagnostic endpoint to check DB connection and tables
-app.get("/api/db-diagnose", async (req, res) => {
+// PBKDF2 hash + salt must never leave the server — with only 10,000 possible
+// 4-digit PINs, anyone who obtained a hash+salt pair could brute-force the
+// real PIN offline in well under a second. Every response that includes a
+// user (or a list of users) must go through this first.
+function sanitizeUser(user: any) {
+  if (!user) return user;
+  const { pinHash, salt, ...safe } = user;
+  return safe;
+}
+function sanitizeUsers(users: any[]) {
+  return users.map(sanitizeUser);
+}
+
+// Diagnostic endpoint to check DB connection and tables. Admin-only — it used to be
+// public and would hand anyone the full table list, whether JWT_SECRET/ADMIN_PIN are
+// set, and raw error stack traces, which is exactly what an attacker probing the site
+// would want to see first.
+app.get("/api/db-diagnose", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     await prisma.$connect();
     const tables = await prisma.$queryRaw`SELECT table_name FROM information_schema.tables WHERE table_schema='public'`;
@@ -551,7 +572,7 @@ app.post("/api/auth/register", async (req, res) => {
 
     const token = generateToken({ id: user.id, role: user.role, phone: user.phone });
     
-    res.json({ user, token });
+    res.json({ user: sanitizeUser(user), token });
   } catch (error) {
     res.status(500).json({ error: "Failed to register user" });
   }
@@ -595,7 +616,7 @@ app.post("/api/auth/login", async (req, res) => {
     
     const token = generateToken({ id: user.id, role: user.role, phone: user.phone });
     
-    res.json({ user, token });
+    res.json({ user: sanitizeUser(user), token });
   } catch (error) {
     res.status(500).json({ error: "Failed to login" });
   }
@@ -606,6 +627,15 @@ app.post("/api/auth/admin-login", async (req, res) => {
     const { password } = req.body;
     if (!password) {
       return res.status(400).json({ error: "Parol kiritilmagan" });
+    }
+
+    // This endpoint had no throttling at all — unlike /api/auth/login it wasn't even
+    // keyed by phone, so a bot could try passwords forever. Key by IP instead, since
+    // there's only ever one admin account to guess against.
+    const attemptKey = `admin:${req.ip}`;
+    const attempt = loginAttempts[attemptKey];
+    if (attempt && attempt.lockUntil && attempt.lockUntil > Date.now()) {
+      return res.status(429).json({ error: "Tizim vaqtincha bloklandi. Keyinroq urinib ko'ring." });
     }
 
     const adminUser = await prisma.user.findFirst({
@@ -626,11 +656,20 @@ app.post("/api/auth/admin-login", async (req, res) => {
     }
 
     if (!isValid) {
+      if (!loginAttempts[attemptKey]) loginAttempts[attemptKey] = { attempts: 0 };
+      loginAttempts[attemptKey].attempts += 1;
+
+      if (loginAttempts[attemptKey].attempts >= 5) {
+        loginAttempts[attemptKey].lockUntil = Date.now() + 15 * 60 * 1000; // 15 mins lock
+        return res.status(429).json({ error: "Ketma-ket xato urinishlar. 15 daqiqadan so'ng urinib ko'ring." });
+      }
       return res.status(401).json({ error: "Admin paroli noto'g'ri" });
     }
 
+    if (loginAttempts[attemptKey]) delete loginAttempts[attemptKey];
+
     const token = generateToken({ id: adminUser.id, role: adminUser.role, phone: adminUser.phone });
-    res.json({ user: adminUser, token, message: "Admin panelga xush kelibsiz" });
+    res.json({ user: sanitizeUser(adminUser), token, message: "Admin panelga xush kelibsiz" });
   } catch (error) {
     console.error("Admin login error:", error);
     res.status(500).json({ error: "Admin login error" });
@@ -906,7 +945,7 @@ app.get("/api/users", authMiddleware, adminMiddleware, async (req, res) => {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    res.json(users);
+    res.json(sanitizeUsers(users));
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch users" });
   }
@@ -926,7 +965,7 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
       include: { addresses: true }
     });
     if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (error) {
     res.status(500).json({ error: "Server xatosi" });
   }
@@ -949,7 +988,7 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
       data: { firstName, lastName, avatar, ...(phone ? { phone } : {}) },
       include: { addresses: true }
     });
-    res.json(updatedUser);
+    res.json(sanitizeUser(updatedUser));
   } catch (error) {
     res.status(500).json({ error: "Profilni yangilashda xatolik" });
   }
@@ -1264,7 +1303,7 @@ app.get("/api/admin/users", authMiddleware, adminMiddleware, async (req, res) =>
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' }
     });
-    res.json(users);
+    res.json(sanitizeUsers(users));
   } catch (error) {
     res.status(500).json({ error: "Foydalanuvchilarni olishda xatolik" });
   }
@@ -1277,7 +1316,7 @@ app.put("/api/admin/users/:id/block", authMiddleware, adminMiddleware, async (re
       where: { id: req.params.id },
       data: { isBlocked }
     });
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (error) {
     res.status(500).json({ error: "Holatni o'zgartirishda xatolik" });
   }
