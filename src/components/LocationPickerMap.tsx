@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { MapPin, Navigation, Compass, AlertCircle, Loader2, Check } from 'lucide-react';
+import { isInAppBrowser } from '../lib/inAppBrowserScrollFix';
 
 interface LocationPickerMapProps {
   initialLat?: number;
@@ -152,6 +153,8 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   }, []);
 
   // Browser Geolocation trigger
+  const gpsFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleDetectGPS = () => {
     if (!navigator.geolocation) {
       setLocationError("Brauzeringizda Geolocation qo'llab-quvvatlanmaydi");
@@ -161,8 +164,26 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
     setIsLocating(true);
     setLocationError(null);
 
+    // Telegram/Instagram/TikTok kabi in-app WebView'larda getCurrentPosition
+    // na muvaffaqiyat, na xato callback'ini hech qachon chaqirmasligi mumkin
+    // — shu WebView'larning tanilgan nuqsoni. Bunday holda pastdagi
+    // `timeout: 10000` sozlamasi e'tiborga olinmaydi va "Aniqlanmoqda..."
+    // abadiy qotib qoladi. Shu sabab, native callback'ga bog'liq bo'lmagan
+    // o'z xavfsizlik chegaramizni qo'yamiz — 12 soniyadan keyin baribir
+    // holatni tozalab, tushunarli xabar ko'rsatamiz.
+    if (gpsFallbackTimerRef.current) clearTimeout(gpsFallbackTimerRef.current);
+    gpsFallbackTimerRef.current = setTimeout(() => {
+      setIsLocating(false);
+      setLocationError(
+        isInAppBrowser()
+          ? "Bu ilova ichidagi brauzerda (Telegram/Instagram) joylashuvni aniqlash ishlamasligi mumkin. Havolani Chrome yoki Safari'da oching, yoki xaritadan qo'lda tanlang."
+          : "Joylashuvni aniqlash vaqti tugadi. Iltimos, xaritadan qo'lda tanlang yoki qayta urinib ko'ring."
+      );
+    }, 12000);
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (gpsFallbackTimerRef.current) clearTimeout(gpsFallbackTimerRef.current);
         const { latitude, longitude } = position.coords;
         setCoords({ lat: latitude, lng: longitude });
 
@@ -175,6 +196,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         setIsLocating(false);
       },
       (error) => {
+        if (gpsFallbackTimerRef.current) clearTimeout(gpsFallbackTimerRef.current);
         setIsLocating(false);
         let msg = "Joylashuvni aniqlab bo'lmadi";
         if (error.code === error.PERMISSION_DENIED) {
@@ -185,6 +207,12 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
+
+  useEffect(() => {
+    return () => {
+      if (gpsFallbackTimerRef.current) clearTimeout(gpsFallbackTimerRef.current);
+    };
+  }, []);
 
   return (
     <div className="space-y-3">
@@ -219,6 +247,13 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         <div className="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-lg">
           <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
           <span>{locationError}</span>
+        </div>
+      )}
+
+      {!locationError && isInAppBrowser() && (
+        <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 text-blue-900 text-xs rounded-lg">
+          <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
+          <span>Ilova ichidagi brauzerda (Telegram va h.k.) GPS ba'zan ishlamasligi mumkin — ishlamasa, xaritadan qo'lda belgilang.</span>
         </div>
       )}
 

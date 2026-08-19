@@ -28,7 +28,11 @@
  *    natively as before.
  */
 
-function isInAppBrowser(): boolean {
+// Exported because LocationPickerMap.tsx also needs to know whether it's
+// running inside one of these in-app WebViews — they have the same
+// underlying WKWebView quirks, and geolocation is broken there the same
+// way scrolling is (see handleDetectGPS's fallback timeout for details).
+export function isInAppBrowser(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
   return (
