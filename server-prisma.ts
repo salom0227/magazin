@@ -616,8 +616,7 @@ app.post("/api/auth/admin-login", async (req, res) => {
       return res.status(404).json({ error: "Admin foydalanuvchisi topilmadi" });
     }
 
-    const validPasswords = ['admin', '1234', process.env.ADMIN_PIN].filter(Boolean);
-    let isValid = validPasswords.includes(password);
+    let isValid = !!process.env.ADMIN_PIN && password === process.env.ADMIN_PIN;
 
     if (!isValid && adminUser.pinHash && adminUser.salt) {
       const { hash } = hashPin(password, adminUser.salt);

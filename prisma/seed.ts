@@ -280,9 +280,15 @@ async function main() {
   }
 
   // Create Admin User (idempotent: safe to run on every deploy)
-  const adminPhone = process.env.ADMIN_PHONE || '+998901234567';
-  const adminPin = process.env.ADMIN_PIN || '1234';
+  // No hardcoded fallback PIN/phone here on purpose — a default like '1234'
+  // would be a real backdoor into the admin panel on any deploy where the
+  // env var was forgotten.
+  const adminPhone = process.env.ADMIN_PHONE;
+  const adminPin = process.env.ADMIN_PIN;
 
+  if (!adminPhone || !adminPin) {
+    console.warn('⚠️  ADMIN_PHONE / ADMIN_PIN env variables are not set — skipping admin user creation. Set them and redeploy to create the admin account.');
+  } else {
   const existingAdmin = await prisma.user.findUnique({ where: { phone: adminPhone } });
 
   if (!existingAdmin) {
@@ -302,6 +308,7 @@ async function main() {
     console.log('✅ Admin user created');
   } else {
     console.log('ℹ️  Admin user already exists, skipping');
+  }
   }
 
   console.log('🎉 Seed completed successfully!');

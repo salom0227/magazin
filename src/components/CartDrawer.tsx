@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -9,7 +9,6 @@ import {
   ArrowRight,
   Truck,
   ShieldCheck,
-  Tag,
   Sparkles
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
@@ -39,20 +38,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOpenProduct }) => {
 
   const { user, openAuthModal } = useAuth();
   const { formatPrice } = useCurrency();
-  const [promoCode, setPromoCode] = useState('');
-  const [promoApplied, setPromoApplied] = useState(false);
-  const [promoDiscount, setPromoDiscount] = useState(0);
 
   if (!isCartDrawerOpen) return null;
-
-  const handleApplyPromo = (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = promoCode.trim().toUpperCase();
-    if (code === 'VELORA' || code === 'ZAMON' || code === 'UZUM' || code === 'LUXURY') {
-      setPromoApplied(true);
-      setPromoDiscount(50000);
-    }
-  };
 
   const handleCheckoutClick = () => {
     setIsCartDrawerOpen(false);
@@ -66,7 +53,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOpenProduct }) => {
   };
 
   const progressPercent = Math.min(100, Math.round((subtotal / freeDeliveryThreshold) * 100));
-  const finalTotal = Math.max(0, total - promoDiscount);
+  const finalTotal = total;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-sm flex justify-end">
@@ -225,35 +212,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOpenProduct }) => {
         {/* Footer Checkout Summary */}
         {items.length > 0 && (
           <div className="p-4 border-t border-[#1d3a2c] bg-[#0b1712] space-y-3 shrink-0">
-            {/* Promo Code Form */}
-            <form onSubmit={handleApplyPromo} className="flex gap-2">
-              <div className="relative flex-1">
-                <Tag className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#dfbe9f]" />
-                <input
-                  type="text"
-                  value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value)}
-                  placeholder="Promokod (masalan: VELORA)"
-                  disabled={promoApplied}
-                  className="w-full pl-8 pr-3 py-1.5 bg-[#12221a] border border-[#244534] rounded-xl text-xs text-white uppercase font-semibold placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f]"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={promoApplied || !promoCode.trim()}
-                className="px-3.5 py-1.5 bg-[#1a3327] hover:bg-[#234535] border border-[#305943] disabled:opacity-50 text-[#dfbe9f] rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                {promoApplied ? 'Qo\'llandi' : 'Kiritish'}
-              </button>
-            </form>
-
-            {promoApplied && (
-              <div className="flex items-center justify-between text-xs text-emerald-400 font-semibold bg-emerald-950/40 border border-emerald-800/40 px-2.5 py-1 rounded-lg">
-                <span>Promokod chegirmasi:</span>
-                <span>-{formatPrice(promoDiscount)}</span>
-              </div>
-            )}
-
             {/* Calculations Breakdown */}
             <div className="space-y-1.5 text-xs text-gray-400">
               <div className="flex justify-between">

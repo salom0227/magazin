@@ -664,20 +664,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <button
                 onClick={() => {
+                  const firstCategory = categoryList[0];
                   setCurrentProduct({
                     name: '',
-                    price: 100000,
-                    oldPrice: 130000,
-                    discount: 20,
-                    category: 'smartphones',
-                    categorySlug: 'smartphones',
-                    categoryName: 'Smartfonlar',
-                    images: ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80'],
+                    price: 0,
+                    categorySlug: firstCategory?.slug || '',
+                    categoryName: firstCategory?.name || '',
+                    images: [],
                     description: '',
-                    stock: 20,
-                    rating: 4.8,
-                    isPopular: true,
-                    specs: { 'Kafolat': '1 yil' },
+                    stock: 0,
+                    isPopular: false,
+                    specs: {},
                   });
                   setIsEditingProduct(true);
                 }}

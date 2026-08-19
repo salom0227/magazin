@@ -59,7 +59,7 @@ export const AdminLoginView: React.FC<{ onGoHome: () => void }> = ({ onGoHome })
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Parolni kiriting (masalan: admin)"
+                placeholder="Admin parolini kiriting"
                 className="w-full pl-10 pr-4 py-3 bg-[#12221a] border border-[#234233] rounded-xl text-sm font-medium text-white placeholder:text-gray-500 focus:outline-none focus:border-[#dfbe9f] transition-colors"
                 autoFocus
                 required
