@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { CartItem, Product } from '../types';
 import { useToast } from './ToastContext';
-import { getUnitPrice } from '../lib/pricing';
+import { getUnitPrice, FREE_DELIVERY_THRESHOLD, STANDARD_DELIVERY_FEE } from '../lib/pricing';
 
 interface CartContextType {
   items: CartItem[];
@@ -26,9 +26,6 @@ interface CartContextType {
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
-
-const FREE_DELIVERY_THRESHOLD = 500000; // 500 000 so'm
-const STANDARD_DELIVERY_FEE = 25000; // 25 000 so'm
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>(() => {

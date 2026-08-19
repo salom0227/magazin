@@ -11,6 +11,7 @@ import { fetchCbuRates } from './src/lib/exchangeRates';
 import { sendOrderNotification, sendReviewNotification } from './src/lib/telegram';
 import multer from 'multer';
 import type { User, Product, Category, Order, AdminStats, OrderStatus, ProductReview, Currency } from "./src/types";
+import { calculateDeliveryFee } from "./src/lib/pricing";
 
 const connectionString = process.env.DATABASE_URL;
 const pool = new pg.Pool({ 
@@ -555,7 +556,14 @@ app.post("/api/currencies/sync", authMiddleware, adminMiddleware, async (req, re
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { firstName, lastName, phone, pin } = req.body;
-    
+
+    // Bu maydonlar bo'lmasa, avval hashPin(pin) yoki Prisma create() ichida
+    // tushunarsiz texnik xato (500) bilan qulardi. Endi aniq, foydalanuvchiga
+    // ko'rsatsa bo'ladigan xabar bilan darhol rad etiladi.
+    if (!firstName || !lastName || !phone || !pin) {
+      return res.status(400).json({ error: "Barcha maydonlarni to'ldiring" });
+    }
+
     const existingUser = await prisma.user.findUnique({
       where: { phone },
     });
@@ -743,14 +751,22 @@ app.post("/api/orders", optionalAuthMiddleware, async (req, res) => {
         const unitPrice = getUnitPrice(product, item.quantity);
         subtotal += unitPrice * item.quantity;
         
-        // Decrease stock
-        await tx.product.update({
-          where: { id: item.productId },
+        // The findUnique check above only proves there was enough stock at
+        // read time — two customers buying the last unit at the same
+        // moment could both pass that check before either one's decrement
+        // lands, taking stock negative. The `stock: { gte }` guard here
+        // makes the actual write atomic: it only succeeds if enough stock
+        // is still there the instant the row is updated, closing that race.
+        const decremented = await tx.product.updateMany({
+          where: { id: item.productId, stock: { gte: item.quantity } },
           data: { 
             stock: { decrement: item.quantity },
             salesCount: { increment: item.quantity }
           }
         });
+        if (decremented.count === 0) {
+          throw new Error(`Kechirasiz, "${product.name}" mahsulotidan yetarli miqdorda qolmadi.`);
+        }
         
         orderItemsData.push({
           productId: product.id,
@@ -762,7 +778,7 @@ app.post("/api/orders", optionalAuthMiddleware, async (req, res) => {
         });
       }
       
-      const deliveryFee = subtotal >= 500000 ? 0 : 30000;
+      const deliveryFee = calculateDeliveryFee(subtotal);
       const total = subtotal + deliveryFee;
       const orderNumber = `ORD-${crypto.randomBytes(3).toString('hex').toUpperCase()}-${Date.now().toString().slice(-4)}`;
 
@@ -1178,24 +1194,58 @@ app.post("/api/products/:id/reviews", authMiddleware, async (req, res) => {
   }
 });
 
+// Har bir mahsulot endpointi kabi (sanitizeProductData), bu yerda ham
+// req.body to'g'ridan-to'g'ri Prisma'ga uzatilmaydi. Frontend kategoriya
+// tahrirlashda butun obyektni (id, createdAt, updatedAt, productCount, ...)
+// qaytarib yuboradi — sanitizatsiyasiz bu qiymatlar bazaga tasodifan qayta
+// yozilib ketishi yoki noma'lum maydon tufayli Prisma xatosi (500) berishi
+// mumkin edi.
+function sanitizeCategoryData(data: any) {
+  const sanitized: any = {};
+  const allowedKeys = ["name", "slug", "iconName", "image", "isActive"];
+  allowedKeys.forEach((key) => {
+    if (data[key] !== undefined) sanitized[key] = data[key];
+  });
+  return sanitized;
+}
+
 // API: Categories Admin
 app.post("/api/categories", authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const category = await prisma.category.create({ data: req.body });
+    const category = await prisma.category.create({ data: sanitizeCategoryData(req.body) });
     res.json(category);
   } catch (error) {
+    console.error("Category create error:", error);
     res.status(500).json({ error: "Toifa yaratishda xatolik" });
   }
 });
 
 app.put("/api/categories/:id", authMiddleware, adminMiddleware, async (req, res) => {
   try {
+    const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ error: "Toifa topilmadi" });
+    }
+
     const category = await prisma.category.update({
       where: { id: req.params.id },
-      data: req.body
+      data: sanitizeCategoryData(req.body)
     });
+
+    // Kategoriya nomi o'zgargan bo'lsa, unga tegishli mahsulotlardagi
+    // denormalizatsiya qilingan categoryName ham sinxronlanadi — aks holda
+    // eski mahsulotlar admin panelda va buyurtmalarda eski nom bilan
+    // ko'rinib qoladi.
+    if (category.name !== existing.name) {
+      await prisma.product.updateMany({
+        where: { categorySlug: category.slug },
+        data: { categoryName: category.name },
+      });
+    }
+
     res.json(category);
   } catch (error) {
+    console.error("Category update error:", error);
     res.status(500).json({ error: "Toifa yangilashda xatolik" });
   }
 });
