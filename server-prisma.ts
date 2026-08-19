@@ -299,9 +299,10 @@ app.get("/api/categories", async (req, res) => {
   try {
     const categories = await prisma.category.findMany({
       where: { isActive: true },
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { products: true } } },
     });
-    res.json(categories);
+    res.json(categories.map((c) => ({ ...c, productCount: c._count.products, _count: undefined })));
   } catch (error) {
     console.error("Categories fetch error:", error);
     res.status(500).json({ error: "Failed to fetch categories" });
@@ -1201,9 +1202,22 @@ app.put("/api/categories/:id", authMiddleware, adminMiddleware, async (req, res)
 
 app.delete("/api/categories/:id", authMiddleware, adminMiddleware, async (req, res) => {
   try {
+    const category = await prisma.category.findUnique({ where: { id: req.params.id } });
+    if (!category) {
+      return res.status(404).json({ error: "Toifa topilmadi" });
+    }
+
+    const productCount = await prisma.product.count({ where: { categorySlug: category.slug } });
+    if (productCount > 0) {
+      return res.status(400).json({
+        error: `Bu toifada ${productCount} ta mahsulot mavjud. Avval ularni boshqa toifaga o'tkazing yoki o'chiring, so'ngra toifani o'chiring.`,
+      });
+    }
+
     await prisma.category.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (error) {
+    console.error("Category delete error:", error);
     res.status(500).json({ error: "Toifa o'chirishda xatolik" });
   }
 });
