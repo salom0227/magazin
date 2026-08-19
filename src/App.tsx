@@ -28,6 +28,7 @@ import { OrdersView } from './components/OrdersView';
 import { ProfileView } from './components/ProfileView';
 import { FavoritesView } from './components/FavoritesView';
 import { AuthModal } from './components/AuthModal';
+import { SALE_CATEGORY_SLUG } from './lib/constants';
 import { Footer } from './components/Footer';
 import { api } from './lib/api';
 import type { Product, Category, Order } from './types';
@@ -98,7 +99,10 @@ const MainAppContent: React.FC = () => {
       const [catsRes, prodsRes] = await Promise.all([
         api.getCategories(),
         api.getProducts({
-          category: selectedCategory !== 'all' ? selectedCategory : undefined,
+          // "Aksiyalar" haqiqiy kategoriya emas — chegirmali mahsulotlarni
+          // discount filtri orqali ko'rsatadi (pastdagi SALE_CATEGORY_SLUG).
+          category: selectedCategory !== 'all' && selectedCategory !== SALE_CATEGORY_SLUG ? selectedCategory : undefined,
+          onSale: selectedCategory === SALE_CATEGORY_SLUG ? true : undefined,
           search: searchQuery.trim() || undefined,
           sort: sortBy,
         }),
@@ -302,6 +306,8 @@ const MainAppContent: React.FC = () => {
                       ? `"${searchQuery}" bo'yicha qidiruv natijalari`
                       : selectedCategory === 'all'
                       ? 'Ommabop mahsulotlar'
+                      : selectedCategory === SALE_CATEGORY_SLUG
+                      ? 'Aksiyadagi mahsulotlar'
                       : categories.find((c) => c.slug === selectedCategory)?.name || 'Katalog'}
                   </span>
                   <span className="text-xs font-bold text-[#dfbe9f] bg-[#162a20] border border-[#2b4c3b] px-2.5 py-0.5 rounded-full font-sans">

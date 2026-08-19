@@ -22,6 +22,7 @@ import { useCart } from '../context/CartContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { formatPrice } from '../lib/formatters';
 import type { Category } from '../types';
+import { SALE_CATEGORY_SLUG } from '../lib/constants';
 
 interface NavbarProps {
   categories: Category[];
@@ -72,12 +73,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navLinks = [
     { label: 'Bosh sahifa', slug: 'all' },
-    { label: 'Ayollar uchun', slug: 'women' },
-    { label: 'Erkaklar uchun', slug: 'men' },
-    { label: 'Uy uchun', slug: 'home' },
-    { label: 'Bolalar uchun', slug: 'kids' },
-    { label: 'Aksessuarlar', slug: 'accessories' },
-    { label: 'Aksiyalar', slug: 'beauty-care', isSpecial: true },
+    // Avval bu yerda 'women', 'men', 'kids' kabi qattiq yozilgan (hardcoded)
+    // slug'lar bor edi — ular admin panelda yaratilgan haqiqiy
+    // kategoriyalarga hech qanday aloqasi yo'q edi, shuning uchun ularni
+    // bosganda har doim "Mahsulot topilmadi" chiqardi va admin panelda ham
+    // ularga mahsulot qo'shishning iloji yo'q edi (chunki bunday kategoriya
+    // umuman mavjud emas edi). Endi bu ro'yxat admin qo'shgan haqiqiy
+    // kategoriyalardan avtomatik tuziladi — admin panelda yangi kategoriya
+    // qo'shilishi bilanoq bu yerda ham paydo bo'ladi.
+    ...categories.slice(0, 5).map((c) => ({ label: c.name, slug: c.slug })),
+    { label: 'Aksiyalar', slug: SALE_CATEGORY_SLUG, isSpecial: true },
   ];
 
   return (

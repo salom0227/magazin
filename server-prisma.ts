@@ -313,11 +313,19 @@ app.get("/api/categories", async (req, res) => {
 // API: Products
 app.get("/api/products", async (req, res) => {
   try {
-    const { category, search, limit = 50, page = 1, sort = "new" } = req.query;
+    const { category, search, onSale, limit = 50, page = 1, sort = "new" } = req.query;
     const where: any = { isActive: true };
     
     if (category && category !== "all") {
       where.categorySlug = category;
+    }
+
+    // "Aksiyalar" navbar bo'limi avval haqiqiy kategoriya bo'lmagan
+    // slug'ga ("beauty-care") bog'langan edi va shu sabab har doim
+    // bo'sh qaytardi. Endi bu kategoriyaga bog'liq emas — chegirmasi
+    // bor (discount > 0) barcha faol mahsulotlarni ko'rsatadi.
+    if (onSale === 'true') {
+      where.discount = { gt: 0 };
     }
     
     if (search) {
