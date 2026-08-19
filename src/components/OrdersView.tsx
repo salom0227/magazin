@@ -238,7 +238,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ onOpenProduct, onGoShopp
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-1.5 font-medium text-white">
                       <MapPin className="w-3.5 h-3.5 text-[#dfbe9f] shrink-0" />
-                      <span>{order.deliveryAddress.formattedAddress || order.deliveryAddress.street}</span>
+                      <span>{order.deliveryAddress?.formattedAddress || order.deliveryAddress?.street || "Manzil ko'rsatilmagan"}</span>
                     </div>
                     <div className="text-[11px] text-gray-400 pl-5">
                       Qabul qiluvchi: {order.customer.firstName} {order.customer.lastName} ({formatPhone(order.customer.phone)})

@@ -819,9 +819,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div>
                         <p className="text-gray-400">Manzil:</p>
                         <p className="font-medium text-gray-200">
-                          {o.deliveryAddress.formattedAddress || o.deliveryAddress.street}
+                          {o.deliveryAddress?.formattedAddress || o.deliveryAddress?.street || "Manzil ko'rsatilmagan"}
                         </p>
-                        {o.deliveryAddress.notes && (
+                        {o.deliveryAddress?.notes && (
                           <p className="text-[11px] text-gray-400 italic">"{o.deliveryAddress.notes}"</p>
                         )}
                       </div>

@@ -72,12 +72,14 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             <span className="font-bold text-white">{formatPrice(order.total)}</span>
           </div>
 
-          <div className="pt-2 border-t border-[#1c382b] flex items-start gap-2 text-xs text-gray-300">
-            <MapPin className="w-4 h-4 text-[#dfbe9f] shrink-0 mt-0.5" />
-            <span className="line-clamp-2">
-              {order.deliveryAddress.formattedAddress || order.deliveryAddress.street}
-            </span>
-          </div>
+          {order.deliveryAddress && (
+            <div className="pt-2 border-t border-[#1c382b] flex items-start gap-2 text-xs text-gray-300">
+              <MapPin className="w-4 h-4 text-[#dfbe9f] shrink-0 mt-0.5" />
+              <span className="line-clamp-2">
+                {order.deliveryAddress.formattedAddress || order.deliveryAddress.street}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

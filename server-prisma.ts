@@ -393,6 +393,15 @@ app.post("/api/products", authMiddleware, adminMiddleware, async (req, res) => {
     const { variants, ...rest } = req.body;
     const sanitizedProduct = sanitizeProductData(rest);
 
+    // Majburiy maydonlar yo'q bo'lsa, avval bu Prisma'ning ichki
+    // validatsiya xatosiga borib, tushunarsiz 500 bilan qulardi. Endi admin
+    // aniq nima yetishmayotganini ko'radi.
+    const required = ["name", "price", "categorySlug", "categoryName"];
+    const missing = required.filter((key) => sanitizedProduct[key] === undefined || sanitizedProduct[key] === "");
+    if (missing.length > 0) {
+      return res.status(400).json({ error: `Majburiy maydonlar to'ldirilmagan: ${missing.join(", ")}` });
+    }
+
     const product = await prisma.product.create({
       data: {
         ...sanitizedProduct,
@@ -596,6 +605,9 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { phone, pin } = req.body;
+    if (!phone || !pin) {
+      return res.status(400).json({ error: "Telefon raqam va PIN kiritilishi shart" });
+    }
 
     const attempt = loginAttempts[phone];
     if (attempt && attempt.lockUntil && attempt.lockUntil > Date.now()) {
@@ -728,6 +740,22 @@ app.get("/api/orders/user", authMiddleware, async (req, res) => {
 app.post("/api/orders", optionalAuthMiddleware, async (req, res) => {
   try {
     const { items, customer, deliveryAddress, paymentMethod } = req.body;
+
+    // items/customer/deliveryAddress yo'q yoki noto'g'ri shaklda bo'lsa,
+    // pastdagi kod (masalan `for (const item of items)`) tushunarsiz
+    // texnik xato bilan qulardi ("items is not iterable",
+    // "Cannot read properties of undefined"). Endi aniq xabar bilan rad
+    // etiladi.
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Savat bo'sh" });
+    }
+    if (!customer || !customer.firstName || !customer.lastName || !customer.phone) {
+      return res.status(400).json({ error: "Mijoz ma'lumotlari to'liq emas" });
+    }
+    if (!deliveryAddress || !deliveryAddress.region || !deliveryAddress.district || !deliveryAddress.street) {
+      return res.status(400).json({ error: "Yetkazib berish manzili to'liq emas" });
+    }
+
     // Trust the server-verified session, not a client-supplied userId —
     // this is also what makes the order show up under "Mening
     // buyurtmalarim" for logged-in users. Guests (no valid token) still
@@ -842,7 +870,16 @@ app.post("/api/orders", optionalAuthMiddleware, async (req, res) => {
 app.put("/api/orders/:id/status", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { status } = req.body;
-    
+
+    // status hech qanday enum bilan cheklanmagan edi — noto'g'ri qiymat
+    // (masalan yozuv xatosi) baribir bazaga yozilib, keyin frontendning
+    // status-ga qarab ishlaydigan hamma joyi (badge rangi, filtrlar,
+    // "keyingi bosqich" tugmalari) buzilardi.
+    const ALLOWED_STATUSES = ['Pending', 'Confirmed', 'Preparing', 'Shipped', 'Delivered', 'Cancelled'];
+    if (!ALLOWED_STATUSES.includes(status)) {
+      return res.status(400).json({ error: "Noto'g'ri holat qiymati" });
+    }
+
     const order = await prisma.order.update({
       where: { id: req.params.id },
       data: {
@@ -1110,11 +1147,22 @@ app.post("/api/favorites", authMiddleware, async (req, res) => {
   try {
     const userId = (req as any).user.id;
     const { productId } = req.body;
-    await prisma.favorite.create({
-      data: { userId, productId }
+    if (!productId) {
+      return res.status(400).json({ error: "Mahsulot ko'rsatilmagan" });
+    }
+    // @@unique([userId, productId]) bor — bir mahsulotni ikki marta bosish
+    // (masalan tez-tez bosilganda, yoki ikki tab ochiq bo'lsa) create() ni
+    // takrorlab chaqirardi va Prisma unique-constraint xatosi (P2002) bilan
+    // 500 qaytarardi. upsert bilan bu amal idempotent bo'ladi — allaqachon
+    // yoqtirilgan bo'lsa ham xatosiz "success" qaytadi.
+    await prisma.favorite.upsert({
+      where: { userId_productId: { userId, productId } },
+      create: { userId, productId },
+      update: {},
     });
     res.json({ success: true });
   } catch (error) {
+    console.error("Add favorite error:", error);
     res.status(500).json({ error: "Saqlashda xatolik" });
   }
 });

@@ -80,6 +80,11 @@ const MainAppContent: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Fetch muvaffaqiyatsiz bo'lganda avval faqat konsolga yozilardi, ekranda
+  // esa "Mahsulot topilmadi" chiqardi — xuddi qidiruv natija bermagandek,
+  // mijoz server ishlamayotganini bilmay qolardi. Endi bu ikki holat
+  // ajratiladi.
+  const [loadError, setLoadError] = useState<boolean>(false);
 
   // Modals
   const [selectedProductModalId, setSelectedProductModalId] = useState<string | null>(null);
@@ -88,6 +93,7 @@ const MainAppContent: React.FC = () => {
   // Load initial categories & products
   const loadData = async () => {
     setIsLoading(true);
+    setLoadError(false);
     try {
       const [catsRes, prodsRes] = await Promise.all([
         api.getCategories(),
@@ -101,6 +107,7 @@ const MainAppContent: React.FC = () => {
       setProducts(prodsRes.products);
     } catch (err) {
       console.error('Error fetching data:', err);
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -336,6 +343,22 @@ const MainAppContent: React.FC = () => {
               <div className="py-24 text-center text-gray-400 space-y-3">
                 <div className="w-8 h-8 border-3 border-[#dfbe9f] border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-xs font-semibold text-gray-300">Mahsulotlar yuklanmoqda...</p>
+              </div>
+            ) : loadError ? (
+              <div className="bg-[#12221a] rounded-3xl p-12 text-center border border-[#234233] space-y-3 max-w-md mx-auto shadow-xl">
+                <div className="w-12 h-12 bg-[#172c21] border border-[#284938] rounded-2xl flex items-center justify-center text-[#dfbe9f] mx-auto">
+                  <ShoppingBag className="w-6 h-6 stroke-[1.5]" />
+                </div>
+                <h3 className="text-sm font-bold text-white">Ma'lumotlarni yuklab bo'lmadi</h3>
+                <p className="text-xs text-gray-400">
+                  Server bilan bog'lanishda xatolik yuz berdi. Internetni tekshirib, qayta urinib ko'ring
+                </p>
+                <button
+                  onClick={() => loadData()}
+                  className="px-5 py-2.5 bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713] font-bold text-xs rounded-xl cursor-pointer hover:opacity-95 transition-opacity"
+                >
+                  Qayta urinish
+                </button>
               </div>
             ) : products.length === 0 ? (
               <div className="bg-[#12221a] rounded-3xl p-12 text-center border border-[#234233] space-y-3 max-w-md mx-auto shadow-xl">
