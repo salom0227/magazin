@@ -101,7 +101,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   // "Dona narxi"/"Optom narxi" tugmalari alohida narx holatini
   // o'zgartirmaydi — ular shunchaki miqdorni optom chegarasidan
   // yuqoriga/pastga suradi, shu orqali natija har doim to'g'ri bo'ladi.
-  const legacyAutoWholesale = !currentVariant && !!product && hasWholesaleTier(product) && !!product.wholesaleMinQty;
+  // wholesaleMinQty === 1 matematik jihatdan ma'nosiz: "kamida 1 dona buyursa optom" —
+  // demak har doim optom, "Dona narxi" hech qachon tanlanmaydigan o'lik tugmaga aylanadi.
+  // Shu holatda tugmalarni ko'rsatmay, to'g'ridan-to'g'ri (yagona) narxni chiqaramiz.
+  const legacyAutoWholesale = !currentVariant && !!product && hasWholesaleTier(product) && !!product.wholesaleMinQty && product.wholesaleMinQty > 1;
   const effectivePriceType = (!currentVariant && legacyAutoWholesale)
     ? (quantity >= (product!.wholesaleMinQty as number) ? 'wholesale' : 'piece')
     : (hasDistinctWholesale ? priceType : 'piece');

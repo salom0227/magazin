@@ -685,9 +685,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </button>
             </div>
 
-            {/* Products Table */}
+            {/* Products Table — min-w so the table keeps its natural width on narrow
+                screens and the wrapper's overflow-x-auto can actually kick in, instead
+                of the columns getting squeezed into each other. */}
             <div className="bg-[#0f1d17] rounded-2xl border border-[#234233] overflow-x-auto shadow-lg">
-              <table className="w-full text-left text-xs text-gray-300">
+              <table className="w-full min-w-[720px] text-left text-xs text-gray-300">
                 <thead className="bg-[#12221a] text-gray-400 uppercase text-[10px] font-bold border-b border-[#1c3629]">
                   <tr>
                     <th className="p-3.5">Rasm & Nomi</th>
@@ -853,7 +855,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         {/* Tab 4: Users Management */}
         {activeTab === 'users' && (
           <div className="bg-[#0f1d17] rounded-2xl border border-[#234233] overflow-x-auto shadow-lg">
-            <table className="w-full text-left text-xs text-gray-300">
+            <table className="w-full min-w-[560px] text-left text-xs text-gray-300">
               <thead className="bg-[#12221a] text-gray-400 uppercase text-[10px] font-bold border-b border-[#1c3629]">
                 <tr>
                   <th className="p-3.5">Foydalanuvchi</th>
@@ -976,6 +978,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   />
                   <p className="text-[11px] text-gray-500 mt-1">
                     Mijoz shu miqdorda yoki undan ko'p buyurtma qilsa, optom narx avtomatik qo'llanadi.
+                    {currentProduct.wholesaleMinQty === 1 && (
+                      <span className="block text-amber-400 mt-0.5">
+                        ⚠️ "1" qiymati optom narxni doimiy qilib qo'yadi — "Dona narxi" hech qachon ko'rinmaydi. Odatda 5, 10 kabi qiymat kiriting.
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -1180,8 +1187,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             Qo'lda kiritilgan qiymat keyingi avtomatik yangilanishda CBU'ning joriy kursi bilan almashtiriladi.
           </p>
 
-          <div className="bg-[#0f1d17] rounded-2xl border border-[#234233] overflow-hidden">
-            <table className="w-full">
+          <div className="bg-[#0f1d17] rounded-2xl border border-[#234233] overflow-x-auto">
+            <table className="w-full min-w-[480px]">
               <thead>
                 <tr className="bg-[#12221a] border-b border-[#234233]">
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400">Valyuta</th>
