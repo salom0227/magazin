@@ -109,6 +109,13 @@ model Product {
   variants     ProductVariant[]
   reviews      ProductReview[]
   favorites    Favorite[]
+
+  // Every catalog request filters by isActive+categorySlug and sorts by one of these —
+  // without indexes each becomes a full table scan once the catalog grows past a
+  // handful of products. Cheap to add now, painful to add later on a live table.
+  @@index([categorySlug])
+  @@index([isActive, createdAt])
+  @@index([salesCount])
 }
 
 model ProductVariant {
@@ -177,6 +184,12 @@ model Order {
   user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   items           OrderItem[]
   deliveryAddress DeliveryAddress?
+
+  // "Mening buyurtmalarim" filters by userId, admin order list filters by status and
+  // sorts by createdAt — both become full scans without these once orders pile up.
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model DeliveryAddress {

@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import crypto from "crypto";
+import compression from "compression";
 import { createServer as createViteServer } from "vite";
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -64,6 +65,11 @@ const app = express();
 // resolves to the proxy's address for every visitor, which would make the admin-login
 // rate limiter below share one bucket across all users instead of one per real client.
 app.set('trust proxy', 1);
+// Gzip/Brotli every text response (HTML, CSS, JS, JSON API). Was completely missing —
+// meaning every page load and every /api/products call was sent uncompressed. This
+// alone typically cuts JS/CSS/JSON transfer size by 60-80%, which matters most on the
+// mobile connections most customers are actually using.
+app.use(compression());
 
 // Prisma stores firstName/lastName/phone as flat columns on Order, but the
 // frontend (and the Order type) expects a nested `customer` object. This
@@ -1328,8 +1334,22 @@ const isProduction = process.env.NODE_ENV === "production";
 async function startServer() {
   if (isProduction) {
     const distPath = path.resolve(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    // Vite gives every JS/CSS file a content hash in its name (e.g. index-COwJPZPg.js),
+    // so those files never change under the same URL — safe to cache for a year.
+    // index.html (and anything else without a hash) must stay revalidated on every
+    // request, otherwise browsers could keep serving an old app shell that points at
+    // JS/CSS chunks which no longer exist after the next deploy.
+    app.use(express.static(distPath, {
+      maxAge: '1y',
+      immutable: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      },
+    }));
     app.get("*", (req, res) => {
+      res.set('Cache-Control', 'no-cache');
       res.sendFile(path.resolve(distPath, "index.html"));
     });
   } else {
