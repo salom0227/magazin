@@ -935,15 +935,57 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
 app.put("/api/auth/profile", authMiddleware, async (req, res) => {
   try {
     const userId = (req as any).user.id;
-    const { firstName, lastName, avatar } = req.body;
+    const { firstName, lastName, avatar, phone } = req.body;
+
+    if (phone) {
+      const existing = await prisma.user.findUnique({ where: { phone } });
+      if (existing && existing.id !== userId) {
+        return res.status(400).json({ error: "Bu telefon raqami boshqa foydalanuvchida ro'yxatdan o'tgan" });
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { firstName, lastName, avatar },
+      data: { firstName, lastName, avatar, ...(phone ? { phone } : {}) },
       include: { addresses: true }
     });
     res.json(updatedUser);
   } catch (error) {
     res.status(500).json({ error: "Profilni yangilashda xatolik" });
+  }
+});
+
+// Login/parolni (PIN) o'zgartirish — admin uchun ham, oddiy foydalanuvchi
+// uchun ham bir xil: admin-login screeni ADMIN_PIN bo'lmasa shu yerda
+// yangilangan pinHash'ni ham tekshiradi (qarang: /api/auth/admin-login).
+app.put("/api/auth/change-pin", authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const { currentPin, newPin } = req.body;
+
+    if (!newPin || !/^\d{4}$/.test(newPin)) {
+      return res.status(400).json({ error: "Yangi PIN 4 ta raqamdan iborat bo'lishi kerak" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.pinHash || !user.salt) {
+      return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+    }
+
+    const { hash: currentHash } = hashPin(currentPin || '', user.salt);
+    if (currentHash !== user.pinHash) {
+      return res.status(401).json({ error: "Joriy PIN noto'g'ri" });
+    }
+
+    const { hash, salt } = hashPin(newPin);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { pinHash: hash, salt },
+    });
+
+    res.json({ message: "PIN muvaffaqiyatli yangilandi" });
+  } catch (error) {
+    res.status(500).json({ error: "PINni yangilashda xatolik" });
   }
 });
 

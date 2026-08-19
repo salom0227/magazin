@@ -95,13 +95,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const hasDistinctWholesale = currentVariant
     ? currentVariant.wholesalePrice !== currentVariant.retailPrice
     : !!(product && hasWholesaleTier(product));
-  // Variant mahsulotlarda (masalan hajm/o'lcham) narx tanlovi hozircha
-  // qo'lda ("dona"/"optom" tugmasi) qoladi — variant darajasida miqdor
-  // chegarasi saqlanmaydi. Oddiy (variantsiz) mahsulotlarda esa narx
-  // to'liq avtomatik: admin panelda belgilangan "optom necha donadan
-  // boshlanishi"ga qarab, tanlangan miqdor yetganda optom narx o'zi
-  // qo'llanadi — bu yerda hech qanday qo'lda tanlov yo'q, shuning uchun
-  // xato bo'lishi mumkin emas.
+  // Oddiy (variantsiz) mahsulotlarda narx FAQAT miqdorga qarab aniqlanadi —
+  // bu backend (getUnitPrice) bilan bitta manba, shuning uchun frontendda
+  // ko'rsatilgan narx serverda hisoblangan narxdan hech qachon farq qilmaydi.
+  // "Dona narxi"/"Optom narxi" tugmalari alohida narx holatini
+  // o'zgartirmaydi — ular shunchaki miqdorni optom chegarasidan
+  // yuqoriga/pastga suradi, shu orqali natija har doim to'g'ri bo'ladi.
   const legacyAutoWholesale = !currentVariant && !!product && hasWholesaleTier(product) && !!product.wholesaleMinQty;
   const effectivePriceType = (!currentVariant && legacyAutoWholesale)
     ? (quantity >= (product!.wholesaleMinQty as number) ? 'wholesale' : 'piece')
@@ -110,6 +109,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     ? (effectivePriceType === 'wholesale' ? currentVariant.wholesalePrice : currentVariant.retailPrice)
     : (product ? getUnitPrice(product, quantity) : 0);
   const currentStock = currentVariant?.stock || product?.stock || 0;
+
+  // "Dona narxi" / "Optom narxi" tugmalari (variantsiz mahsulotlar uchun) —
+  // narxni to'g'ridan-to'g'ri o'zgartirmaydi, aksincha miqdorni optom
+  // chegarasidan pastga/yuqoriga suradi, shunda ko'rsatilgan narx va
+  // serverda qayta hisoblanadigan narx har doim bir xil bo'ladi.
+  const handleSelectPiece = () => {
+    if (!product || !legacyAutoWholesale) return;
+    const minQty = product.wholesaleMinQty as number;
+    if (quantity >= minQty) setQuantity(Math.max(1, minQty - 1));
+  };
+  const handleSelectWholesale = () => {
+    if (!product || !legacyAutoWholesale) return;
+    const minQty = product.wholesaleMinQty as number;
+    if (quantity < minQty) setQuantity(minQty);
+  };
 
   const handleBuyNow = () => {
     if (!product) return;
@@ -297,9 +311,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </div>
                     )}
 
-                    {/* Price Type Selector — faqat variant mahsulotlarda qo'lda tanlov, chunki
-                        variant darajasida miqdor chegarasi mavjud emas. Oddiy mahsulotlarda
-                        narx miqdorga qarab avtomatik aniqlanadi (pastdagi ko'rsatmaga qarang). */}
+                    {/* Price Type Selector — variant mahsulotlarda qo'lda tanlov (variant
+                        darajasida miqdor chegarasi yo'q). Oddiy mahsulotlarda ham tugmalar
+                        ko'rsatiladi, lekin ular miqdorni optom chegarasidan pastga/yuqoriga
+                        suradi — shu bilan ko'rinadigan narx serverdagi narx bilan har doim mos. */}
                     {hasDistinctWholesale && currentVariant && (
                       <div className="flex gap-2 mb-3">
                         <button
@@ -318,6 +333,33 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           onClick={() => setPriceType('wholesale')}
                           className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                             priceType === 'wholesale'
+                              ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713]'
+                              : 'bg-[#1a3327] text-gray-400 border border-[#2b4c3b]'
+                          }`}
+                        >
+                          Optom narxi
+                        </button>
+                      </div>
+                    )}
+
+                    {legacyAutoWholesale && (
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          type="button"
+                          onClick={handleSelectPiece}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            effectivePriceType === 'piece'
+                              ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713]'
+                              : 'bg-[#1a3327] text-gray-400 border border-[#2b4c3b]'
+                          }`}
+                        >
+                          Dona narxi
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSelectWholesale}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            effectivePriceType === 'wholesale'
                               ? 'bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] text-[#0d1713]'
                               : 'bg-[#1a3327] text-gray-400 border border-[#2b4c3b]'
                           }`}

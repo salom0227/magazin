@@ -62,6 +62,16 @@ export const api = {
     return parseErrorAndThrow(res, 'Profilni yangilashda xatolik');
   },
 
+  async changePin(currentPin: string, newPin: string): Promise<{ message: string }> {
+    const res = await fetch(`${API_BASE}/auth/change-pin`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ currentPin, newPin }),
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, 'PINni yangilashda xatolik');
+  },
+
   async addAddress(address: Record<string, any>): Promise<User> {
     const res = await fetch(`${API_BASE}/auth/addresses`, {
       method: 'POST',

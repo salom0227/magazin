@@ -19,6 +19,7 @@ interface AuthContextType {
   register: (firstName: string, lastName: string, phone: string, pin: string) => Promise<void>;
   logout: () => void;
   updateProfile: (profile: Partial<User>) => Promise<void>;
+  changePin: (currentPin: string, newPin: string) => Promise<void>;
   addAddress: (address: any) => Promise<void>;
   deleteAddress: (id: string) => Promise<void>;
 }
@@ -149,6 +150,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const changePin = async (currentPin: string, newPin: string) => {
+    try {
+      await api.changePin(currentPin, newPin);
+      showToast('Parol (PIN) muvaffaqiyatli yangilandi', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Xatolik', 'error');
+      throw err;
+    }
+  };
+
   const addAddress = async (address: any) => {
     try {
       const updated = await api.addAddress(address);
@@ -191,6 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         updateProfile,
+        changePin,
         addAddress,
         deleteAddress,
       }}
