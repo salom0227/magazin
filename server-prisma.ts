@@ -14,8 +14,18 @@ import type { User, Product, Category, Order, AdminStats, OrderStatus, ProductRe
 import { calculateDeliveryFee } from "./src/lib/pricing";
 
 const connectionString = process.env.DATABASE_URL;
+// pg standart holatda faqat 10 ta ulanishga ruxsat beradi — kichik trafikda
+// sezilmaydi, lekin bir nechta mijoz bir vaqtda so'rov yuborganda navbat
+// paydo bo'lib, sayt sekinlashishi mumkin edi. max qiymatini oshirish deyarli
+// bepul (Postgres o'zi minglab ulanishni ko'taradi), shuning uchun sig'imni
+// xavfsiz zaxira bilan kattalashtiramiz. idleTimeoutMillis foydalanilmayotgan
+// ulanishlarni yopib, resursni bo'shatadi; connectionTimeoutMillis esa baza
+// ishlamay qolganda so'rovlar abadiy osilib qolmasligini ta'minlaydi.
 const pool = new pg.Pool({ 
   connectionString,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
   ssl: connectionString && !connectionString.includes('localhost') && !connectionString.includes('127.0.0.1')
     ? { rejectUnauthorized: false }
     : undefined
