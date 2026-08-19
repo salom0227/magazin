@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { CheckCircle2, Package, ArrowRight, Home, Clock, MapPin } from 'lucide-react';
 import type { Order } from '../types';
-import { formatPrice, formatDate } from '../lib/formatters';
+import { formatDate } from '../lib/formatters';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface OrderSuccessModalProps {
   order: Order | null;
@@ -16,6 +17,8 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   onClose,
   onViewOrders,
 }) => {
+  const { formatPrice } = useCurrency();
+
   useEffect(() => {
     if (order) {
       // Trigger celebratory confetti with gold/emerald luxury palette

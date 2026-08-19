@@ -101,6 +101,7 @@ model Product {
   specs        Json     @default("{}")
   wholesalePrice Int?    // optom narxi (legacy)
   piecePrice     Int?    // dona narxi (legacy)
+  wholesaleMinQty Int?   // optom narxi qo'llanadigan minimal dona soni
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -134,6 +135,7 @@ model ProductReview {
   userName  String
   rating    Int
   comment   String
+  images    String[] @default([])
   createdAt DateTime @default(now())
 
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -212,8 +214,9 @@ model Currency {
   id        String   @id @default(cuid())
   code      String   @unique // USD, EUR, RUB, CNY
   symbol    String   // $, €, ₽, ¥
-  rate      Int      // exchange rate to UZS
+  rate      Float    // 1 birlik shu valyuta = necha so'm (UZS)
   isActive  Boolean  @default(false)
+  source    String   @default("manual") // "cbu" (avtomatik) | "manual" (admin qo'lda kiritgan)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -1,4 +1,4 @@
-import type { User, Product, Category, Order, AdminStats, AuthResponse, Currency, Banner } from '../types';
+import type { User, Product, Category, Order, AdminStats, AuthResponse, Currency, Banner, ProductReview } from '../types';
 
 const API_BASE = '/api';
 
@@ -128,11 +128,11 @@ export const api = {
     return parseErrorAndThrow(res, "Mahsulotni o'chirishda xatolik");
   },
 
-  async addProductReview(productId: string, rating: number, comment: string): Promise<any> {
+  async addProductReview(productId: string, rating: number, comment: string, images: string[] = []): Promise<{ review: ProductReview; rating: number; reviewsCount: number }> {
     const res = await fetch(`${API_BASE}/products/${productId}/reviews`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-      body: JSON.stringify({ rating, comment }),
+      body: JSON.stringify({ rating, comment, images }),
     });
     if (res.ok) return await res.json();
     return parseErrorAndThrow(res, 'Sharh yuborishda xatolik');
@@ -317,5 +317,26 @@ export const api = {
     });
     if (res.ok) return await res.json();
     return parseErrorAndThrow(res, 'Valyuta kursini yangilashda xatolik');
+  },
+
+  async syncCurrencies(): Promise<{ message: string; currencies: Currency[] }> {
+    const res = await fetch(`${API_BASE}/currencies/sync`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, "Kurslarni yangilab bo'lmadi");
+  },
+
+  async uploadReviewImage(file: File): Promise<{ url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE}/upload/review-image`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+      body: formData,
+    });
+    if (res.ok) return await res.json();
+    return parseErrorAndThrow(res, "Rasmni yuklashda xatolik");
   },
 };

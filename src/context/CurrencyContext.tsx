@@ -46,16 +46,22 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!selectedCurrency || selectedCurrency.code === 'UZS') {
       return priceUZS;
     }
+    // Kurs hali yuklanmagan yoki noto'g'ri bo'lsa (0/undefined), NaN yoki
+    // cheksizlikni ko'rsatib qo'ymaslik uchun so'mda qoldiramiz — bu
+    // "hisob-kitobda xato" ko'rinishining oldini oladi.
+    if (!selectedCurrency.rate || !isFinite(selectedCurrency.rate) || selectedCurrency.rate <= 0) {
+      return priceUZS;
+    }
     return priceUZS / selectedCurrency.rate;
   };
 
   const formatPrice = (priceUZS: number): string => {
-    const converted = convertPrice(priceUZS);
-    if (!selectedCurrency) {
-      return `${converted.toLocaleString('uz-UZ')} so'm`;
+    if (priceUZS === undefined || priceUZS === null || !isFinite(priceUZS)) {
+      priceUZS = 0;
     }
-    if (selectedCurrency.code === 'UZS') {
-      return `${converted.toLocaleString('uz-UZ')} so'm`;
+    const converted = convertPrice(priceUZS);
+    if (!selectedCurrency || selectedCurrency.code === 'UZS' || !selectedCurrency.rate) {
+      return `${Math.round(priceUZS).toLocaleString('uz-UZ')} so'm`;
     }
     return `${selectedCurrency.symbol}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };

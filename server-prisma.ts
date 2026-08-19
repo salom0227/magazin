@@ -6,7 +6,8 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { uploadToR2, generateFileName } from './src/lib/r2';
-import { sendOrderNotification } from './src/lib/telegram';
+import { fetchCbuRates } from './src/lib/exchangeRates';
+import { sendOrderNotification, sendReviewNotification } from './src/lib/telegram';
 import multer from 'multer';
 import type { User, Product, Category, Order, AdminStats, OrderStatus, ProductReview, Currency } from "./src/types";
 
@@ -19,6 +20,44 @@ const pool = new pg.Pool({
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
+
+// USD/EUR/RUB/CNY kurslarini O'zbekiston Markaziy banki (CBU)'ning rasmiy
+// API'sidan sinxronlaydi, shunda saytda ko'rsatiladigan narxlar har doim
+// haqiqiy, joriy kursga mos keladi (admin tomonidan qo'lda kiritilgan
+// eskirgan raqamlar emas). CBU vaqtincha ishlamay qolsa ham, oxirgi
+// muvaffaqiyatli olingan kurs bazada saqlanib qoladi — narxlar hech qachon
+// 0 yoki noto'g'ri qiymatga tushib qolmaydi.
+const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', RUB: '₽', CNY: '¥' };
+const SUPPORTED_CURRENCY_CODES = ['USD', 'EUR', 'RUB', 'CNY'];
+
+async function syncCurrencyRates(): Promise<{ updated: string[]; failed: boolean }> {
+  try {
+    const rates = await fetchCbuRates();
+    const updated: string[] = [];
+
+    for (const code of SUPPORTED_CURRENCY_CODES) {
+      const rate = rates[code];
+      if (!rate || !isFinite(rate) || rate <= 0) continue;
+
+      await prisma.currency.upsert({
+        where: { code },
+        update: { rate, source: 'cbu' },
+        create: { code, symbol: CURRENCY_SYMBOLS[code] || code, rate, isActive: true, source: 'cbu' },
+      });
+      updated.push(code);
+    }
+
+    console.log(`✅ Valyuta kurslari CBU'dan yangilandi (${updated.join(', ')}) — ${new Date().toISOString()}`);
+    return { updated, failed: false };
+  } catch (error) {
+    console.error('❌ CBU dan valyuta kursini olishda xatolik, oxirgi ma\'lum kurslar saqlanadi:', error);
+    return { updated: [], failed: true };
+  }
+}
+
+// Server ishga tushganda darhol, so'ngra har 6 soatda bir marta sinxronlaydi.
+syncCurrencyRates();
+setInterval(syncCurrencyRates, 6 * 60 * 60 * 1000);
 
 const app = express();
 
@@ -119,6 +158,7 @@ function sanitizeProductData(data: any) {
     "specs",
     "wholesalePrice",
     "piecePrice",
+    "wholesaleMinQty",
   ];
 
   allowedKeys.forEach((key) => {
@@ -137,8 +177,27 @@ function sanitizeProductData(data: any) {
   if (sanitized.salesCount !== undefined) sanitized.salesCount = Math.round(Number(sanitized.salesCount));
   if (sanitized.wholesalePrice !== undefined) sanitized.wholesalePrice = Math.round(Number(sanitized.wholesalePrice));
   if (sanitized.piecePrice !== undefined) sanitized.piecePrice = Math.round(Number(sanitized.piecePrice));
+  if (sanitized.wholesaleMinQty !== undefined) {
+    sanitized.wholesaleMinQty = sanitized.wholesaleMinQty === null || sanitized.wholesaleMinQty === ''
+      ? null
+      : Math.round(Number(sanitized.wholesaleMinQty));
+  }
 
   return sanitized;
+}
+
+// Optom narx qachon qo'llanishini hal qiluvchi yagona joy — bu yerdagi
+// mantiq buzilsa, butun sayt bo'ylab (savat, checkout, buyurtma) narx
+// noto'g'ri hisoblanadi, shuning uchun frontend va backend shu bir xil
+// qoidaga amal qiladi: admin belgilagan minimal dona sonidan kam bo'lmasa
+// va optom narx haqiqatan ham belgilangan bo'lsa — optom narx ishlatiladi.
+function getUnitPrice(product: { price: number; piecePrice?: number | null; wholesalePrice?: number | null; wholesaleMinQty?: number | null }, quantity: number): number {
+  const piecePrice = product.piecePrice || product.price;
+  const hasWholesale = !!product.wholesalePrice && !!product.wholesaleMinQty && product.wholesaleMinQty > 0;
+  if (hasWholesale && quantity >= (product.wholesaleMinQty as number)) {
+    return product.wholesalePrice as number;
+  }
+  return piecePrice;
 }
 
 // Utility: Simple secure JWT implementation using HMAC-SHA256
@@ -399,6 +458,24 @@ app.post("/api/upload", authMiddleware, adminMiddleware, upload.single('file'), 
   }
 });
 
+// API: Review Image Upload — any logged-in user (not just admin) can upload
+// a photo to attach to their product review, Uzum-style.
+app.post("/api/upload/review-image", authMiddleware, upload.single('file'), async (req: any, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const fileName = `reviews/${generateFileName(req.file.originalname)}`;
+    const url = await uploadToR2(req.file.buffer, fileName, req.file.mimetype);
+
+    res.json({ url });
+  } catch (error) {
+    console.error('Review image upload error:', error);
+    res.status(500).json({ error: "Rasmni yuklashda xatolik" });
+  }
+});
+
 // API: Currencies
 app.get("/api/currencies", async (req, res) => {
   try {
@@ -413,14 +490,37 @@ app.get("/api/currencies", async (req, res) => {
 
 app.put("/api/currencies/:id", authMiddleware, adminMiddleware, async (req, res) => {
   try {
+    const data: any = {};
+    if (req.body.rate !== undefined) {
+      const rate = Number(req.body.rate);
+      if (!isFinite(rate) || rate <= 0) {
+        return res.status(400).json({ error: "Kurs musbat son bo'lishi kerak" });
+      }
+      data.rate = rate;
+      data.source = 'manual'; // admin qo'lda o'zgartirdi — keyingi avtomatik CBU sinxronizatsiyasigacha shu qiymat qo'llanadi
+    }
+    if (req.body.isActive !== undefined) data.isActive = !!req.body.isActive;
+    if (req.body.symbol !== undefined) data.symbol = String(req.body.symbol).slice(0, 8);
+
     const currency = await prisma.currency.update({
       where: { id: req.params.id },
-      data: req.body,
+      data,
     });
     res.json(currency);
   } catch (error) {
     res.status(500).json({ error: "Failed to update currency" });
   }
+});
+
+// Admin panelidan "Hozir yangilash" tugmasi orqali CBU kurslarini
+// darhol qayta olib kelish uchun.
+app.post("/api/currencies/sync", authMiddleware, adminMiddleware, async (req, res) => {
+  const result = await syncCurrencyRates();
+  if (result.failed) {
+    return res.status(502).json({ error: "CBU dan kurslarni olib bo'lmadi. Birozdan so'ng qayta urinib ko'ring." });
+  }
+  const currencies = await prisma.currency.findMany({ orderBy: { code: 'asc' } });
+  res.json({ message: `Yangilandi: ${result.updated.join(', ')}`, currencies });
 });
 
 // API: Auth
@@ -592,8 +692,11 @@ app.post("/api/orders", optionalAuthMiddleware, async (req, res) => {
           throw new Error(`Kechirasiz, "${product.name}" mahsulotidan faqat ${product.stock} dona qolgan.`);
         }
         
-        // Calculate with real price from DB
-        subtotal += product.price * item.quantity;
+        // Calculate with real price from DB — automatically applies the
+        // admin-configured wholesale (optom) price once quantity reaches
+        // the configured threshold. Never trust a price sent by the client.
+        const unitPrice = getUnitPrice(product, item.quantity);
+        subtotal += unitPrice * item.quantity;
         
         // Decrease stock
         await tx.product.update({
@@ -607,7 +710,7 @@ app.post("/api/orders", optionalAuthMiddleware, async (req, res) => {
         orderItemsData.push({
           productId: product.id,
           name: product.name,
-          price: product.price,
+          price: unitPrice,
           quantity: item.quantity,
           image: product.images[0] || "",
           categoryName: product.categoryName
@@ -931,17 +1034,33 @@ app.post("/api/products/:id/reviews", authMiddleware, async (req, res) => {
     const productId = req.params.id;
     const userId = (req as any).user.id;
     const { rating, comment } = req.body;
+    const ratingNum = Math.round(Number(rating));
+    const images: string[] = Array.isArray(req.body.images)
+      ? req.body.images.filter((u: any) => typeof u === 'string').slice(0, 5)
+      : [];
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!ratingNum || ratingNum < 1 || ratingNum > 5) {
+      return res.status(400).json({ error: "Yulduzcha bahosi 1 dan 5 gacha bo'lishi kerak" });
+    }
+    if (!comment || !String(comment).trim()) {
+      return res.status(400).json({ error: "Sharh matnini kiriting" });
+    }
+
+    const [user, product] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId } }),
+      prisma.product.findUnique({ where: { id: productId } }),
+    ]);
     if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+    if (!product) return res.status(404).json({ error: "Mahsulot topilmadi" });
 
     const review = await prisma.productReview.create({
       data: {
         productId,
         userId,
         userName: `${user.firstName} ${user.lastName}`,
-        rating: Number(rating),
-        comment
+        rating: ratingNum,
+        comment: String(comment).trim(),
+        images,
       }
     });
 
@@ -958,8 +1077,16 @@ app.post("/api/products/:id/reviews", authMiddleware, async (req, res) => {
       }
     });
 
-    res.json(review);
+    // Har bir yangi sharh — kim, qaysi mahsulotga, nechta yulduz va nima
+    // yozgani — Telegram botga yuboriladi. Yuborish muvaffaqiyatsiz bo'lsa
+    // ham sharh baribir saqlangan bo'lib qoladi.
+    sendReviewNotification(review, product.name).catch((err) =>
+      console.error('❌ Failed to send review notification:', err)
+    );
+
+    res.json({ review, rating: averageRating, reviewsCount: productReviews.length });
   } catch (error) {
+    console.error('Add review error:', error);
     res.status(500).json({ error: "Sharh qoldirishda xatolik" });
   }
 });

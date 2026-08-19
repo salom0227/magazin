@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { CartItem, Product } from '../types';
 import { useToast } from './ToastContext';
+import { getUnitPrice } from '../lib/pricing';
 
 interface CartContextType {
   items: CartItem[];
@@ -14,7 +15,7 @@ interface CartContextType {
   setIsCartDrawerOpen: (open: boolean) => void;
   isCheckoutModalOpen: boolean;
   setIsCheckoutModalOpen: (open: boolean) => void;
-  addToCart: (product: Product, quantity?: number, options?: { color?: string; size?: string }) => void;
+  addToCart: (product: Product, quantity?: number, options?: { color?: string; size?: string; unitPriceOverride?: number }) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
@@ -68,33 +69,48 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [favorites]);
 
-  const addToCart = (product: Product, quantity = 1, options?: { color?: string; size?: string }) => {
+  const addToCart = (product: Product, quantity = 1, options?: { color?: string; size?: string; unitPriceOverride?: number }) => {
     if (product.stock <= 0) {
       showToast('Kechirasiz, mahsulot omborda qolmagan', 'error');
       return;
     }
 
+    // Variant mahsulotlar uchun (masalan hajm/o'lcham tanlangan) narx
+    // ProductDetailModal'da allaqachon hisoblab beriladi (unitPriceOverride).
+    // Oddiy mahsulotlar uchun narx miqdorga qarab (optom chegarasi bo'yicha)
+    // shu yerda avtomatik hisoblanadi — bu butun sayt bo'ylab yagona qoida.
+    const usesOverride = options?.unitPriceOverride !== undefined;
+
     setItems((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
       if (existing) {
         const newQty = Math.min(existing.quantity + quantity, product.stock);
+        const newUnitPrice = usesOverride
+          ? (options!.unitPriceOverride as number)
+          : getUnitPrice(product, newQty);
         return prev.map((item) =>
           item.productId === product.id
             ? {
                 ...item,
                 quantity: newQty,
+                unitPrice: newUnitPrice,
                 selectedColor: options?.color || item.selectedColor,
                 selectedSize: options?.size || item.selectedSize,
               }
             : item
         );
       }
+      const qty = Math.min(quantity, product.stock);
+      const unitPrice = usesOverride
+        ? (options!.unitPriceOverride as number)
+        : getUnitPrice(product, qty);
       return [
         ...prev,
         {
           productId: product.id,
           product,
-          quantity: Math.min(quantity, product.stock),
+          quantity: qty,
+          unitPrice,
           selectedColor: options?.color,
           selectedSize: options?.size,
         },
@@ -113,7 +129,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((item) => {
         if (item.productId === productId) {
           const maxQty = item.product.stock || 99;
-          return { ...item, quantity: Math.min(quantity, maxQty) };
+          const newQty = Math.min(quantity, maxQty);
+          // Variantli mahsulotlarda tanlangan variant narxi savatda
+          // saqlanmagani sabab (faqat rang/o'lcham nomi saqlanadi), miqdor
+          // o'zgarganda narxni faqat variant biriktirilmagan mahsulotlar
+          // uchun qayta hisoblaymiz — aks holda noto'g'ri (bazaviy) narxga
+          // sakrab ketishi mumkin edi.
+          const hasVariants = !!item.product.variants?.length;
+          const newUnitPrice = hasVariants ? item.unitPrice : getUnitPrice(item.product, newQty);
+          return { ...item, quantity: newQty, unitPrice: newUnitPrice };
         }
         return item;
       })
@@ -152,7 +176,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const subtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+    return items.reduce((sum, item) => sum + (item.unitPrice ?? item.product.price) * item.quantity, 0);
   }, [items]);
 
   const itemsCount = useMemo(() => {

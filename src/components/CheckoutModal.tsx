@@ -18,7 +18,7 @@ import {
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { formatPrice } from '../lib/formatters';
+import { useCurrency } from '../context/CurrencyContext';
 import { api } from '../lib/api';
 import type { Order } from '../types';
 
@@ -34,6 +34,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onOrderSuccess }) 
   const { items, subtotal, deliveryFee, total, isCheckoutModalOpen, setIsCheckoutModalOpen, clearCart } = useCart();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { formatPrice } = useCurrency();
 
   // Step management (1: Info & Address, 2: Payment & Confirm)
   const [step, setStep] = useState<1 | 2>(1);
@@ -434,7 +435,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onOrderSuccess }) 
                         {it.product.name} <strong className="text-[#dfbe9f]">× {it.quantity}</strong>
                       </span>
                       <span className="font-semibold shrink-0 text-[#dfbe9f]">
-                        {formatPrice(it.product.price * it.quantity)}
+                        {formatPrice((it.unitPrice ?? it.product.price) * it.quantity)}
                       </span>
                     </div>
                   ))}

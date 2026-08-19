@@ -22,6 +22,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { getUnitPrice, hasWholesaleTier } from '../lib/pricing';
 import { api } from '../lib/api';
 
 interface ProductDetailModalProps {
@@ -54,6 +55,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [ratingInput, setRatingInput] = useState(5);
   const [commentInput, setCommentInput] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reviewImages, setReviewImages] = useState<string[]>([]);
+  const [isUploadingReviewImage, setIsUploadingReviewImage] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!productId) return;
@@ -90,16 +94,26 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   // Otherwise both toggle buttons would show the exact same number, which reads as a bug.
   const hasDistinctWholesale = currentVariant
     ? currentVariant.wholesalePrice !== currentVariant.retailPrice
-    : !!(product?.wholesalePrice && product.wholesalePrice !== (product?.piecePrice || product?.price));
-  const effectivePriceType = hasDistinctWholesale ? priceType : 'piece';
+    : !!(product && hasWholesaleTier(product));
+  // Variant mahsulotlarda (masalan hajm/o'lcham) narx tanlovi hozircha
+  // qo'lda ("dona"/"optom" tugmasi) qoladi — variant darajasida miqdor
+  // chegarasi saqlanmaydi. Oddiy (variantsiz) mahsulotlarda esa narx
+  // to'liq avtomatik: admin panelda belgilangan "optom necha donadan
+  // boshlanishi"ga qarab, tanlangan miqdor yetganda optom narx o'zi
+  // qo'llanadi — bu yerda hech qanday qo'lda tanlov yo'q, shuning uchun
+  // xato bo'lishi mumkin emas.
+  const legacyAutoWholesale = !currentVariant && !!product && hasWholesaleTier(product) && !!product.wholesaleMinQty;
+  const effectivePriceType = (!currentVariant && legacyAutoWholesale)
+    ? (quantity >= (product!.wholesaleMinQty as number) ? 'wholesale' : 'piece')
+    : (hasDistinctWholesale ? priceType : 'piece');
   const currentPrice = currentVariant
     ? (effectivePriceType === 'wholesale' ? currentVariant.wholesalePrice : currentVariant.retailPrice)
-    : (effectivePriceType === 'wholesale' ? (product?.wholesalePrice as number) : (product?.piecePrice || product?.price));
+    : (product ? getUnitPrice(product, quantity) : 0);
   const currentStock = currentVariant?.stock || product?.stock || 0;
 
   const handleBuyNow = () => {
     if (!product) return;
-    addToCart(product, quantity);
+    addToCart(product, quantity, currentVariant ? { unitPriceOverride: currentPrice } : undefined);
     onClose();
     setIsCheckoutModalOpen(true);
   };
@@ -114,16 +128,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
     setIsSubmittingReview(true);
     try {
-      const res = await api.addProductReview(product.id, ratingInput, commentInput);
+      const res = await api.addProductReview(product.id, ratingInput, commentInput, reviewImages);
       showToast('Sharhingiz uchun tashakkur!', 'success');
       setCommentInput('');
+      setReviewImages([]);
       setProduct((prev) => {
         if (!prev) return prev;
         const newReviews = [res.review, ...(prev.reviews || [])];
         return {
           ...prev,
           reviews: newReviews,
-          reviewsCount: newReviews.length,
+          reviewsCount: res.reviewsCount ?? newReviews.length,
           rating: res.rating,
         };
       });
@@ -131,6 +146,33 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       showToast(err.message || 'Sharh yuborishda xatolik', 'error');
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const handleReviewImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // re-selecting the same file later still fires onChange
+    if (files.length === 0) return;
+    if (reviewImages.length + files.length > 5) {
+      showToast("Ko'pi bilan 5 ta rasm yuklash mumkin", 'error');
+      return;
+    }
+
+    setIsUploadingReviewImage(true);
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        if (file.size > 5 * 1024 * 1024) {
+          showToast(`"${file.name}" 5MB dan katta, o'tkazib yuborildi`, 'error');
+          continue;
+        }
+        const { url } = await api.uploadReviewImage(file);
+        setReviewImages((prev) => [...prev, url]);
+      }
+    } catch (err: any) {
+      showToast(err.message || "Rasmni yuklashda xatolik", 'error');
+    } finally {
+      setIsUploadingReviewImage(false);
     }
   };
 
@@ -255,8 +297,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </div>
                     )}
 
-                    {/* Price Type Selector — only shown when wholesale price actually differs from retail */}
-                    {hasDistinctWholesale && (
+                    {/* Price Type Selector — faqat variant mahsulotlarda qo'lda tanlov, chunki
+                        variant darajasida miqdor chegarasi mavjud emas. Oddiy mahsulotlarda
+                        narx miqdorga qarab avtomatik aniqlanadi (pastdagi ko'rsatmaga qarang). */}
+                    {hasDistinctWholesale && currentVariant && (
                       <div className="flex gap-2 mb-3">
                         <button
                           type="button"
@@ -292,7 +336,25 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           {formatPrice(product.oldPrice)}
                         </span>
                       )}
+                      {!currentVariant && effectivePriceType === 'wholesale' && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-400 border border-emerald-800/40">
+                          Optom narx
+                        </span>
+                      )}
                     </div>
+
+                    {/* Oddiy (variantsiz) mahsulotlarda optom narx qachon ishlashi haqida
+                        aniq, avtomatik ko'rsatma — Uzum'dagi kabi hech qanday qo'lda
+                        tanlovsiz, faqat miqdorga bog'liq. */}
+                    {legacyAutoWholesale && (
+                      <p className="text-xs text-gray-400">
+                        {effectivePriceType === 'wholesale' ? (
+                          <>✅ {product!.wholesaleMinQty} dona va undan ko'p — optom narx qo'llanmoqda: <span className="text-[#dfbe9f] font-bold">{formatPrice(product!.wholesalePrice as number)}</span> / dona</>
+                        ) : (
+                          <>{product!.wholesaleMinQty} dona va undan ortiq buyurtma qilsangiz, optom narx amal qiladi: <span className="text-[#dfbe9f] font-bold">{formatPrice(product!.wholesalePrice as number)}</span> / dona</>
+                        )}
+                      </p>
+                    )}
 
                     {/* Wholesale Price Table Button */}
                     {currentVariant?.wholesaleTiers && currentVariant.wholesaleTiers.length > 0 && (
@@ -339,7 +401,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                       <button
                         type="button"
-                        onClick={() => addToCart(product, quantity)}
+                        onClick={() => addToCart(product, quantity, currentVariant ? { unitPriceOverride: currentPrice } : undefined)}
                         disabled={currentStock <= 0}
                         className="py-3 px-4 bg-[#172c21] hover:bg-[#1e392b] text-[#dfbe9f] border border-[#2e5240] font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
                       >
@@ -500,9 +562,45 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           required
                         />
 
+                        {/* Rasm biriktirish — Uzum'dagi kabi sharhga foto qo'shish */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {reviewImages.map((url, idx) => (
+                            <div key={url} className="relative w-14 h-14 rounded-lg overflow-hidden border border-[#284c3a] group">
+                              <img src={url} alt="" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => setReviewImages((prev) => prev.filter((_, i) => i !== idx))}
+                                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                              >
+                                <X className="w-4 h-4 text-white" />
+                              </button>
+                            </div>
+                          ))}
+                          {reviewImages.length < 5 && (
+                            <label className="w-14 h-14 rounded-lg border border-dashed border-[#284c3a] flex items-center justify-center cursor-pointer hover:border-[#dfbe9f] transition-colors text-gray-400 hover:text-[#dfbe9f]">
+                              {isUploadingReviewImage ? (
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Plus className="w-5 h-5" />
+                              )}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleReviewImagePick}
+                                disabled={isUploadingReviewImage}
+                                className="hidden"
+                              />
+                            </label>
+                          )}
+                          {reviewImages.length === 0 && (
+                            <span className="text-[10px] text-gray-500">Rasm qo'shish (ixtiyoriy, 5 tagacha)</span>
+                          )}
+                        </div>
+
                         <button
                           type="submit"
-                          disabled={isSubmittingReview || !commentInput.trim()}
+                          disabled={isSubmittingReview || !commentInput.trim() || isUploadingReviewImage}
                           className="px-4 py-2 bg-gradient-to-r from-[#dfbe9f] to-[#b88a64] hover:opacity-95 text-[#0d1713] rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
                           <Send className="w-3 h-3" />
@@ -530,6 +628,20 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                 ))}
                               </div>
                               <p className="text-xs text-gray-300">{rev.comment}</p>
+                              {rev.images && rev.images.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {rev.images.map((url) => (
+                                    <button
+                                      key={url}
+                                      type="button"
+                                      onClick={() => setLightboxImage(url)}
+                                      className="w-14 h-14 rounded-lg overflow-hidden border border-[#234233] cursor-pointer hover:opacity-80 transition-opacity"
+                                    >
+                                      <img src={url} alt="" className="w-full h-full object-cover" />
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))
                         ) : (
@@ -630,6 +742,34 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </motion.div>
         </div>
       )}
+
+      {/* Review image lightbox — Uzum'dagi kabi rasmni kattalashtirib ko'rish */}
+      <AnimatePresence>
+        {lightboxImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setLightboxImage(null)}
+            className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md cursor-zoom-out"
+          >
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <motion.img
+              initial={{ scale: 0.92 }}
+              animate={{ scale: 1 }}
+              src={lightboxImage}
+              alt="Sharh rasmi"
+              className="max-w-full max-h-full rounded-xl object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

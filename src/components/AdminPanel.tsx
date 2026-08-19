@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Layers,
   Coins,
+  RefreshCw,
   Image as ImageIcon,
   GripVertical
 } from 'lucide-react';
@@ -59,6 +60,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Currencies
   const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [isSyncingCurrencies, setIsSyncingCurrencies] = useState(false);
 
   // Categories
   const [categoryList, setCategoryList] = useState<Category[]>(categories);
@@ -962,6 +964,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
 
                 <div>
+                  <label className="block text-gray-300 mb-1 font-semibold">Optom necha donadan boshlanadi</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Masalan: 10"
+                    value={currentProduct.wholesaleMinQty || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setCurrentProduct({ ...currentProduct, wholesaleMinQty: val ? Number(val) : undefined });
+                    }}
+                    className="w-full px-3 py-2 bg-[#12221a] border border-[#234233] rounded-xl text-white focus:outline-none focus:border-[#dfbe9f]"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Mijoz shu miqdorda yoki undan ko'p buyurtma qilsa, optom narx avtomatik qo'llanadi.
+                  </p>
+                </div>
+
+                <div>
                   <label className="block text-gray-300 mb-1 font-semibold">Dona narxi (so'm)</label>
                   <input
                     type="text"
@@ -1136,7 +1157,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <Coins className="w-5 h-5 text-[#dfbe9f]" />
               <span>Valyuta kurslari</span>
             </h2>
+            <button
+              onClick={async () => {
+                setIsSyncingCurrencies(true);
+                try {
+                  const result = await api.syncCurrencies();
+                  setCurrencies(result.currencies);
+                  showToast(result.message || 'Kurslar yangilandi', 'success');
+                } catch (err: any) {
+                  showToast(err.message || "Kurslarni yangilab bo'lmadi", 'error');
+                } finally {
+                  setIsSyncingCurrencies(false);
+                }
+              }}
+              disabled={isSyncingCurrencies}
+              className="flex items-center gap-2 px-4 py-2 bg-[#1a3327] hover:bg-[#234233] text-[#dfbe9f] rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncingCurrencies ? 'animate-spin' : ''}`} />
+              {isSyncingCurrencies ? 'Yangilanmoqda...' : 'Hozir yangilash (CBU)'}
+            </button>
           </div>
+
+          <p className="text-xs text-gray-500 -mt-2">
+            USD, EUR, RUB, CNY kurslari O'zbekiston Markaziy banki (CBU) rasmiy API'sidan har 6 soatda avtomatik yangilanadi.
+            Qo'lda kiritilgan qiymat keyingi avtomatik yangilanishda CBU'ning joriy kursi bilan almashtiriladi.
+          </p>
 
           <div className="bg-[#0f1d17] rounded-2xl border border-[#234233] overflow-hidden">
             <table className="w-full">
@@ -1145,8 +1190,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400">Valyuta</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400">Belgisi</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400">Kurs (UZS)</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400">Manba</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400">Holat</th>
-                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400">Amallar</th>
                 </tr>
               </thead>
               <tbody>
@@ -1161,21 +1206,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <td className="px-4 py-3">
                       <input
                         type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={currency.rate || ''}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '');
+                        inputMode="decimal"
+                        defaultValue={currency.rate || ''}
+                        onBlur={(e) => {
+                          const val = e.target.value.replace(/[^\d.]/g, '');
                           const newRate = val ? Number(val) : 0;
-                          api.updateCurrency(currency.id, { rate: newRate }).then(() => {
-                            setCurrencies(currencies.map(c => 
-                              c.id === currency.id ? { ...c, rate: newRate } : c
+                          if (!newRate || newRate === currency.rate) return;
+                          api.updateCurrency(currency.id, { rate: newRate }).then((updated) => {
+                            setCurrencies(currencies.map(c =>
+                              c.id === currency.id ? updated : c
                             ));
-                            showToast('Kurs yangilandi', 'success');
-                          });
+                            showToast('Kurs qo\'lda yangilandi', 'success');
+                          }).catch((err) => showToast(err.message, 'error'));
                         }}
                         className="w-32 px-2 py-1 bg-[#0d1713] border border-[#234233] rounded-lg text-white text-sm focus:outline-none focus:border-[#dfbe9f]"
                       />
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                        currency.source === 'manual'
+                          ? 'bg-amber-900/30 text-amber-400 border border-amber-800/40'
+                          : 'bg-sky-900/30 text-sky-400 border border-sky-800/40'
+                      }`}>
+                        {currency.source === 'manual' ? "Qo'lda" : 'CBU (avtomatik)'}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <button
@@ -1195,9 +1249,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       >
                         {currency.isActive ? 'Faol' : 'Nofaol'}
                       </button>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="text-xs text-gray-500">Tahrirlash</span>
                     </td>
                   </tr>
                 ))}

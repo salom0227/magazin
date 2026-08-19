@@ -4,8 +4,9 @@ export interface Currency {
   id: string;
   code: string; // USD, EUR, RUB, CNY
   symbol: string; // $, €, ₽, ¥
-  rate: number; // exchange rate to UZS
+  rate: number; // 1 birlik shu valyuta = necha so'm (UZS)
   isActive: boolean;
+  source?: 'cbu' | 'manual';
 }
 
 export interface WholesaleTier {
@@ -85,6 +86,7 @@ export interface ProductReview {
   userName: string;
   rating: number;
   comment: string;
+  images?: string[];
   createdAt: string;
 }
 
@@ -112,6 +114,7 @@ export interface Product {
   variants?: ProductVariant[]; // product variants (sizes, volumes, etc.)
   wholesalePrice?: number; // optom narxi (legacy, use variants)
   piecePrice?: number; // dona narxi (legacy, use variants)
+  wholesaleMinQty?: number; // optom narxi qo'llanadigan minimal dona soni
   createdAt: string;
   updatedAt: string;
 }
@@ -122,6 +125,9 @@ export interface CartItem {
   quantity: number;
   selectedColor?: string;
   selectedSize?: string;
+  // Har bir savat elementi uchun aniq narx — optom/dona chegarasiga qarab
+  // hisoblanadi va qo'shilgan/miqdori o'zgargan paytda qayta hisoblanadi.
+  unitPrice: number;
 }
 
 export type OrderStatus =

@@ -61,3 +61,61 @@ ${order.deliveryAddress.notes ? `📝 Izoh: ${order.deliveryAddress.notes}` : ''
 function formatPrice(price: number): string {
   return price.toLocaleString('uz-UZ') + " so'm";
 }
+
+function starsFor(rating: number): string {
+  const full = Math.max(0, Math.min(5, Math.round(rating)));
+  return '⭐'.repeat(full) + '☆'.repeat(5 - full);
+}
+
+// Har bir yangi mahsulot sharhi (kim, qaysi mahsulot, necha yulduz, matn,
+// rasmlar) botga yuboriladi — barcha sharhlarni bitta joydan kuzatib borish
+// uchun.
+export async function sendReviewNotification(
+  review: { userName: string; rating: number; comment: string; images?: string[] },
+  productName: string
+) {
+  try {
+    if (CHAT_IDS.length === 0) return;
+
+    const caption = `
+📝 <b>Yangi sharh</b>
+
+🛍️ <b>Mahsulot:</b> ${productName}
+👤 <b>Kim yozdi:</b> ${review.userName}
+${starsFor(review.rating)} (${review.rating}/5)
+
+💬 <b>Fikr:</b>
+${review.comment}
+    `.trim();
+
+    for (const chatId of CHAT_IDS) {
+      try {
+        const images = (review.images || []).filter(Boolean).slice(0, 10);
+
+        if (images.length === 0) {
+          await bot.telegram.sendMessage(chatId, caption, { parse_mode: 'HTML' });
+        } else if (images.length === 1) {
+          await bot.telegram.sendPhoto(chatId, images[0], {
+            caption,
+            parse_mode: 'HTML',
+          });
+        } else {
+          // Media group captions only render on the first item in Telegram.
+          await bot.telegram.sendMediaGroup(
+            chatId,
+            images.map((url, i) => ({
+              type: 'photo' as const,
+              media: url,
+              ...(i === 0 ? { caption, parse_mode: 'HTML' as const } : {}),
+            }))
+          );
+        }
+      } catch (err) {
+        console.error(`❌ Failed to send review notification to ${chatId}:`, err);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to send review notification:', error);
+    // Sharh notification muvaffaqiyatsiz bo'lsa ham, sharh saqlanishi kerak.
+  }
+}

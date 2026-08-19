@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { formatPrice } from '../lib/formatters';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface CartDrawerProps {
   onOpenProduct?: (productId: string) => void;
@@ -38,6 +38,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOpenProduct }) => {
   } = useCart();
 
   const { user, openAuthModal } = useAuth();
+  const { formatPrice } = useCurrency();
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
   const [promoDiscount, setPromoDiscount] = useState(0);
@@ -186,10 +187,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOpenProduct }) => {
                   <div className="mt-2 flex items-center justify-between">
                     <div>
                       <span className="text-xs font-bold text-[#dfbe9f] block">
-                        {formatPrice(item.product.price)}
+                        {formatPrice(item.unitPrice ?? item.product.price)}
                       </span>
                       <span className="text-[10px] text-gray-400">
-                        Jami: {formatPrice(item.product.price * item.quantity)}
+                        Jami: {formatPrice((item.unitPrice ?? item.product.price) * item.quantity)}
                       </span>
                     </div>
 
