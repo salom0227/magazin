@@ -57,7 +57,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onOrderSuccess }) 
   const [formattedAddress, setFormattedAddress] = useState('');
 
   // Payment method
-  const [paymentMethod, setPaymentMethod] = useState<'uzum_pay' | 'card' | 'cash' | 'payme' | 'click'>('uzum_pay');
+  const [paymentMethod] = useState<'cash'>('cash');
 
   // Sync user defaults when modal opens
   useEffect(() => {
@@ -359,64 +359,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onOrderSuccess }) 
           ) : (
             /* Step 2: Payment Method & Final Summary */
             <div className="space-y-6">
-              {/* Payment Methods */}
+              {/* Payment Methods — hozircha faqat naqd (kuryerga) ishlaydi.
+                  Online to'lov (Payme/Click/Uzcard/Humo) ulanmagan, shuning
+                  uchun ko'rsatilmaydi — aks holda mijoz to'lov qilib, hech
+                  narsa yechilmagani uchun chalkashadi. */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-[#dfbe9f] uppercase tracking-wider flex items-center gap-1.5 font-serif">
                   <CreditCard className="w-4 h-4 text-[#dfbe9f]" />
-                  <span>To'lov usulini tanlang</span>
+                  <span>To'lov usuli</span>
                 </h4>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <label
-                    onClick={() => setPaymentMethod('uzum_pay')}
-                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-2 ${
-                      paymentMethod === 'uzum_pay'
-                        ? 'border-[#dfbe9f] bg-[#162e22] shadow-xs'
-                        : 'border-[#244534] hover:border-[#315d46] bg-[#102018]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-[#dfbe9f]">Velora Pay / Nasiya</span>
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'uzum_pay' ? 'border-[#dfbe9f] bg-[#dfbe9f]' : 'border-gray-500'}`}>
-                        {paymentMethod === 'uzum_pay' && <div className="w-1.5 h-1.5 bg-[#0d1713] rounded-full" />}
-                      </div>
+                <div className="p-3.5 rounded-2xl border-2 border-[#dfbe9f] bg-[#162e22] shadow-xs flex flex-col justify-between gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-white">Qabul qilganda naqd</span>
+                    <div className="w-4 h-4 rounded-full border-2 border-[#dfbe9f] bg-[#dfbe9f] flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 bg-[#0d1713] rounded-full" />
                     </div>
-                    <span className="text-[11px] text-gray-400">1 klikda to'lov yoki 0-0-12 muddatli to'lov</span>
-                  </label>
-
-                  <label
-                    onClick={() => setPaymentMethod('card')}
-                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-2 ${
-                      paymentMethod === 'card'
-                        ? 'border-[#dfbe9f] bg-[#162e22] shadow-xs'
-                        : 'border-[#244534] hover:border-[#315d46] bg-[#102018]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-white">Bank kartasi (Uzcard / Humo)</span>
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-[#dfbe9f] bg-[#dfbe9f]' : 'border-gray-500'}`}>
-                        {paymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-[#0d1713] rounded-full" />}
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-gray-400">Online xavfsiz to'lov</span>
-                  </label>
-
-                  <label
-                    onClick={() => setPaymentMethod('cash')}
-                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-2 ${
-                      paymentMethod === 'cash'
-                        ? 'border-[#dfbe9f] bg-[#162e22] shadow-xs'
-                        : 'border-[#244534] hover:border-[#315d46] bg-[#102018]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-white">Qabul qilganda naqd</span>
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-[#dfbe9f] bg-[#dfbe9f]' : 'border-gray-500'}`}>
-                        {paymentMethod === 'cash' && <div className="w-1.5 h-1.5 bg-[#0d1713] rounded-full" />}
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-gray-400">Kuryerga yetkazilganda to'lash</span>
-                  </label>
+                  </div>
+                  <span className="text-[11px] text-gray-400">Kuryerga yetkazilganda to'lash</span>
                 </div>
               </div>
 
